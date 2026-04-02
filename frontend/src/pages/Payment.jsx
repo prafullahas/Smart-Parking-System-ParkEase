@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import Navbar from '../components/Navbar';
 import api from '../api/axios';
 import '../App.css';
 
@@ -51,88 +52,117 @@ const Payment = () => {
   }
 
   return (
-    <div className="payment-page">
-      <header className="payment-header">
-        <h1>Payment</h1>
-      </header>
+    <div className="page-wrapper">
+      <Navbar />
+      <div className="page-content">
+        <div className="container-sm" style={{ maxWidth: '500px', margin: '2rem auto' }}>
+          {/* Payment Header Card */}
+          <div className="card card-glass" style={{ marginBottom: 'var(--spacing-3xl)' }}>
+            <h1 style={{ fontSize: '2rem', marginBottom: 'var(--spacing-lg)', textAlign: 'center' }}>💳 Complete Payment</h1>
+          </div>
 
-      <main className="payment-main">
-        <div className="booking-details">
-          <h2>Booking Details</h2>
-          <div className="detail-row">
-            <span>Location:</span>
-            <span>{bookingData.location.name}</span>
+          {/* Booking Details */}
+          <div className="card card-glass" style={{ marginBottom: 'var(--spacing-3xl)' }}>
+            <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--spacing-lg)' }}>Booking Details</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--spacing-md)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)' }}>📍 Location</span>
+                <span style={{ fontWeight: '500' }}>{bookingData.location.name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--spacing-md)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)' }}>🅿️ Slot</span>
+                <span style={{ fontWeight: '500' }}>{bookingData.slot.slotNumber}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--spacing-md)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)' }}>🚗 Vehicle</span>
+                <span style={{ fontWeight: '500' }}>{bookingData.vehicleNumber}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--spacing-md)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)' }}>📅 Date & Time</span>
+                <span style={{ fontWeight: '500' }}>{bookingData.date} {bookingData.time}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--spacing-md)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)' }}>⏱️ Duration</span>
+                <span style={{ fontWeight: '500' }}>{bookingData.duration} hour{bookingData.duration > 1 ? 's' : ''}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--spacing-md)', paddingTop: 'var(--spacing-md)', borderTop: '2px solid var(--primary)' }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: '600' }}>Total Amount</span>
+                <span style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary)' }}>₹{bookingData.amount}</span>
+              </div>
+            </div>
           </div>
-          <div className="detail-row">
-            <span>Slot:</span>
-            <span>{bookingData.slot.slotNumber} ({bookingData.slot.floor} Floor)</span>
+
+          {error && (
+            <div style={{ 
+              padding: 'var(--spacing-md)', 
+              backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+              border: '1px solid var(--danger)',
+              borderRadius: 'var(--radius-lg)',
+              color: 'var(--danger)',
+              marginBottom: 'var(--spacing-lg)',
+              fontSize: '0.9rem'
+            }}>
+              {error}
+            </div>
+          )}
+
+          {/* Payment Methods */}
+          <div className="card card-glass" style={{ marginBottom: 'var(--spacing-3xl)' }}>
+            <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--spacing-lg)' }}>Select Payment Method</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-2xl)' }}>
+              {[
+                { id: 'upi', icon: '📱', name: 'UPI', desc: 'Google Pay, PhonePe, Paytm' },
+                { id: 'credit_card', icon: '💳', name: 'Credit Card', desc: 'Visa, Mastercard, Rupay' },
+                { id: 'debit_card', icon: '🏦', name: 'Debit Card', desc: 'All Indian banks' },
+                { id: 'wallet', icon: '👛', name: 'Digital Wallet', desc: 'Paytm, Amazon Pay' }
+              ].map((method) => (
+                <div
+                  key={method.id}
+                  onClick={() => setPaymentMethod(method.id)}
+                  style={{
+                    padding: 'var(--spacing-lg)',
+                    border: paymentMethod === method.id ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 'var(--radius-lg)',
+                    backgroundColor: paymentMethod === method.id ? 'rgba(0, 198, 255, 0.1)' : 'rgba(255,255,255,0.02)',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-base)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--spacing-lg)'
+                  }}
+                >
+                  <span style={{ fontSize: '1.8rem' }}>{method.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>{method.name}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>{method.desc}</div>
+                  </div>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    backgroundColor: paymentMethod === method.id ? 'var(--primary)' : 'transparent'
+                  }} />
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={handlePayment}
+              disabled={loading}
+              className="btn btn-primary btn-lg"
+              style={{ width: '100%', opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+            >
+              {loading ? '⏳ Processing Payment...' : `Pay ₹${bookingData.amount} 🔐`}
+            </button>
           </div>
-          <div className="detail-row">
-            <span>Vehicle:</span>
-            <span>{bookingData.vehicleType} - {bookingData.vehicleNumber}</span>
-          </div>
-          <div className="detail-row">
-            <span>Date & Time:</span>
-            <span>{bookingData.date} at {bookingData.time}</span>
-          </div>
-          <div className="detail-row">
-            <span>Duration:</span>
-            <span>{bookingData.duration} hour{bookingData.duration > 1 ? 's' : ''}</span>
-          </div>
-          <div className="detail-row total">
-            <span>Total Amount:</span>
-            <span>₹{bookingData.amount}</span>
+
+          {/* Security Info */}
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
+            <p>🔒 Your payment is secure and encrypted</p>
           </div>
         </div>
-
-        <div className="payment-section">
-          <h2>Select Payment Method</h2>
-          
-          {error && <div className="error-message">{error}</div>}
-          
-          <div className="payment-methods">
-            <div 
-              className={`payment-option ${paymentMethod === 'upi' ? 'selected' : ''}`}
-              onClick={() => setPaymentMethod('upi')}
-            >
-              <h3>UPI</h3>
-              <p>Google Pay, PhonePe, Paytm</p>
-            </div>
-            
-            <div 
-              className={`payment-option ${paymentMethod === 'credit_card' ? 'selected' : ''}`}
-              onClick={() => setPaymentMethod('credit_card')}
-            >
-              <h3>Credit Card</h3>
-              <p>Visa, Mastercard, Rupay</p>
-            </div>
-            
-            <div 
-              className={`payment-option ${paymentMethod === 'debit_card' ? 'selected' : ''}`}
-              onClick={() => setPaymentMethod('debit_card')}
-            >
-              <h3>Debit Card</h3>
-              <p>All Indian banks</p>
-            </div>
-            
-            <div 
-              className={`payment-option ${paymentMethod === 'wallet' ? 'selected' : ''}`}
-              onClick={() => setPaymentMethod('wallet')}
-            >
-              <h3>Wallet</h3>
-              <p>Paytm, Amazon Pay</p>
-            </div>
-          </div>
-
-          <button 
-            onClick={handlePayment} 
-            disabled={loading} 
-            className="pay-button"
-          >
-            {loading ? 'Processing Payment...' : `Pay ₹${bookingData.amount}`}
-          </button>
-        </div>
-      </main>
+      </div>
     </div>
   );
 };

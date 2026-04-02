@@ -1,0 +1,219 @@
+<svg viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a1628;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0f2347;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#051119;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Radial gradient for glow effects -->
+    <radialGradient id="glowGreen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#00ffff;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#00ffff;stop-opacity:0" />
+    </radialGradient>
+    
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#00c6ff;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#00c6ff;stop-opacity:0" />
+    </radialGradient>
+    
+    <radialGradient id="glowTeal" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#20b2aa;stop-opacity:0.5" />
+      <stop offset="100%" style="stop-color:#20b2aa;stop-opacity:0" />
+    </radialGradient>
+
+    <!-- Car gradient -->
+    <linearGradient id="carGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a3f5f;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d1f2d;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Filter for soft shadows -->
+    <filter id="softShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Glow filter -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="url(#bgGradient)"/>
+  
+  <!-- Grid lines - subtle -->
+  <g stroke="#00c6ff" stroke-width="0.5" opacity="0.15">
+    <!-- Vertical lines -->
+    <line x1="200" y1="0" x2="200" y2="1080"/>
+    <line x1="400" y1="0" x2="400" y2="1080"/>
+    <line x1="600" y1="0" x2="600" y2="1080"/>
+    <line x1="800" y1="0" x2="800" y2="1080"/>
+    <line x1="1000" y1="0" x2="1000" y2="1080"/>
+    <line x1="1200" y1="0" x2="1200" y2="1080"/>
+    <line x1="1400" y1="0" x2="1400" y2="1080"/>
+    <line x1="1600" y1="0" x2="1600" y2="1080"/>
+    <line x1="1800" y1="0" x2="1800" y2="1080"/>
+  </g>
+
+  <!-- Parking lot sections with glows -->
+  <g id="parking-section-1">
+    <!-- Glow effect -->
+    <circle cx="400" cy="300" r="150" fill="url(#glowCyan)" opacity="0.4"/>
+    
+    <!-- Parking slots -->
+    <g stroke="#00c6ff" stroke-width="2" fill="none" opacity="0.7">
+      <!-- Slot 1 -->
+      <rect x="280" y="200" width="80" height="110" rx="4"/>
+      <line x1="280" y1="230" x2="360" y2="230" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+      
+      <!-- Slot 2 -->
+      <rect x="380" y="200" width="80" height="110" rx="4"/>
+      <line x1="380" y1="230" x2="460" y2="230" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+      
+      <!-- Slot 3 -->
+      <rect x="480" y="200" width="80" height="110" rx="4"/>
+      <line x1="480" y1="230" x2="560" y2="230" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+    </g>
+
+    <!-- Car 1 in slot 1 -->
+    <g filter="url(#softShadow)">
+      <rect x="290" y="215" width="60" height="85" rx="8" fill="url(#carGradient)"/>
+      <ellipse cx="310" cy="235" rx="8" ry="10" fill="#1a3f5f"/>
+      <ellipse cx="340" cy="235" rx="8" ry="10" fill="#1a3f5f"/>
+      <!-- Glow around car -->
+      <circle cx="320" cy="260" r="35" fill="url(#glowGreen)" opacity="0.3"/>
+    </g>
+  </g>
+
+  <!-- Parking section 2 -->
+  <g id="parking-section-2">
+    <!-- Glow effect -->
+    <circle cx="1300" cy="400" r="150" fill="url(#glowTeal)" opacity="0.35"/>
+    
+    <!-- Parking slots -->
+    <g stroke="#00c6ff" stroke-width="2" fill="none" opacity="0.7">
+      <!-- Slot 4 -->
+      <rect x="1180" y="300" width="80" height="110" rx="4"/>
+      <line x1="1180" y1="330" x2="1260" y2="330" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+      
+      <!-- Slot 5 -->
+      <rect x="1280" y="300" width="80" height="110" rx="4"/>
+      <line x1="1280" y1="330" x2="1360" y2="330" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+      
+      <!-- Slot 6 -->
+      <rect x="1380" y="300" width="80" height="110" rx="4"/>
+      <line x1="1380" y1="330" x2="1460" y2="330" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+    </g>
+
+    <!-- Car 2 in slot 5 -->
+    <g filter="url(#softShadow)">
+      <rect x="1290" y="315" width="60" height="85" rx="8" fill="url(#carGradient)"/>
+      <ellipse cx="1310" cy="335" rx="8" ry="10" fill="#1a3f5f"/>
+      <ellipse cx="1340" cy="335" rx="8" ry="10" fill="#1a3f5f"/>
+      <!-- Glow around car -->
+      <circle cx="1320" cy="360" r="35" fill="url(#glowGreen)" opacity="0.3"/>
+    </g>
+  </g>
+
+  <!-- Parking section 3 (bottom) -->
+  <g id="parking-section-3">
+    <!-- Glow effect -->
+    <circle cx="500" cy="850" r="140" fill="url(#glowCyan)" opacity="0.35"/>
+    
+    <!-- Parking slots -->
+    <g stroke="#00c6ff" stroke-width="2" fill="none" opacity="0.7">
+      <!-- Slot 7 -->
+      <rect x="380" y="760" width="80" height="110" rx="4"/>
+      <line x1="380" y1="790" x2="460" y2="790" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+      
+      <!-- Slot 8 -->
+      <rect x="480" y="760" width="80" height="110" rx="4"/>
+      <line x1="480" y1="790" x2="560" y2="790" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+    </g>
+
+    <!-- Car 3 in slot 7 -->
+    <g filter="url(#softShadow)">
+      <rect x="390" y="775" width="60" height="85" rx="8" fill="url(#carGradient)"/>
+      <ellipse cx="410" cy="795" rx="8" ry="10" fill="#1a3f5f"/>
+      <ellipse cx="440" cy="795" rx="8" ry="10" fill="#1a3f5f"/>
+      <!-- Glow around car -->
+      <circle cx="420" cy="820" r="35" fill="url(#glowGreen)" opacity="0.3"/>
+    </g>
+  </g>
+
+  <!-- Parking section 4 (right bottom) -->
+  <g id="parking-section-4">
+    <!-- Glow effect -->
+    <circle cx="1400" cy="750" r="140" fill="url(#glowTeal)" opacity="0.3"/>
+    
+    <!-- Parking slots -->
+    <g stroke="#00c6ff" stroke-width="2" fill="none" opacity="0.7">
+      <!-- Slot 9 -->
+      <rect x="1280" y="660" width="80" height="110" rx="4"/>
+      <line x1="1280" y1="690" x2="1360" y2="690" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+      
+      <!-- Slot 10 -->
+      <rect x="1380" y="660" width="80" height="110" rx="4"/>
+      <line x1="1380" y1="690" x2="1460" y2="690" stroke="#20b2aa" stroke-width="1.5" opacity="0.8"/>
+    </g>
+  </g>
+
+  <!-- Smart indicators (decorative) -->
+  <g stroke="#00ffff" stroke-width="1.5" fill="none" opacity="0.5" filter="url(#glow)">
+    <!-- Network lines connecting sections -->
+    <path d="M 400 310 Q 700 400 1300 410" stroke="#20b2aa" stroke-width="1" opacity="0.3"/>
+    <path d="M 500 860 Q 900 600 1400 760" stroke="#20b2aa" stroke-width="1" opacity="0.3"/>
+    <path d="M 400 310 L 500 860" stroke="#00c6ff" stroke-width="0.8" opacity="0.2"/>
+  </g>
+
+  <!-- Central area (empty for UI text) -->
+  <circle cx="960" cy="540" r="200" fill="url(#glowCyan)" opacity="0.1"/>
+  <circle cx="960" cy="540" r="180" stroke="#00c6ff" stroke-width="1" fill="none" opacity="0.2" stroke-dasharray="5,5"/>
+
+  <!-- Corner accents -->
+  <g opacity="0.15">
+    <circle cx="100" cy="100" r="80" fill="url(#glowCyan)"/>
+    <circle cx="1820" cy="100" r="80" fill="url(#glowTeal)"/>
+    <circle cx="100" cy="980" r="80" fill="url(#glowTeal)"/>
+    <circle cx="1820" cy="980" r="80" fill="url(#glowCyan)"/>
+  </g>
+
+  <!-- Additional decorative elements -->
+  <g stroke="#00c6ff" stroke-width="0.75" fill="none" opacity="0.25">
+    <!-- Direction lines -->
+    <path d="M 100 400 L 150 400"/>
+    <path d="M 1770 600 L 1820 600"/>
+    <polygon points="150,400 145,395 145,405" stroke="none" fill="#00c6ff" opacity="0.25"/>
+    <polygon points="1820,600 1815,595 1815,605" stroke="none" fill="#00c6ff" opacity="0.25"/>
+  </g>
+
+  <!-- Subtle grid overlay for parking organization -->
+  <g stroke="#00c6ff" stroke-width="0.3" opacity="0.08">
+    <line x1="0" y1="400" x2="1920" y2="400"/>
+    <line x1="0" y1="540" x2="1920" y2="540"/>
+    <line x1="0" y1="680" x2="1920" y2="680"/>
+    <line x1="960" y1="0" x2="960" y2="1080"/>
+  </g>
+
+  <!-- Text overlay area hint -->
+  <text x="960" y="530" font-size="14" fill="#00c6ff" opacity="0.3" text-anchor="middle" font-family="'Segoe UI', sans-serif" letter-spacing="2">
+    CENTER AREA FOR UI
+  </text>
+  <text x="960" y="550" font-size="12" fill="#20b2aa" opacity="0.25" text-anchor="middle" font-family="'Segoe UI', sans-serif">
+    ✓ 6 Available Slots
+  </text>
+</svg>
