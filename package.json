@@ -4,8 +4,8 @@
   "description": "Smart Parking Management System Backend API",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node server-mock.js",
+    "dev": "node server-mock.js",
     "seed": "node utils/seedData.js",
     "seed:slots": "node utils/seedSlotsWithLayout.js"
   },
