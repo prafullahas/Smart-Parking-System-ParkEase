@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { sendNotification } = require('../utils/notificationService');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -14,17 +15,33 @@ const generateToken = (id) => {
 const signup = async (req, res) => {
   try {
     const { name, email, password, phone, currentLocation, vehicle } = req.body;
+    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedPhone = phone?.replace(/\D/g, '');
 
     // Validate required fields
-    if (!name || !email || !password || !phone) {
+    if (!name || !normalizedEmail || !password || !normalizedPhone) {
       return res.status(400).json({
         success: false,
         message: 'Please provide all required fields'
       });
     }
 
+    if (!/^[\w-.+]+@[\w-]+\.[\w-.]+$/.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email'
+      });
+    }
+
+    if (normalizedPhone.length !== 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number must be 10 digits'
+      });
+    }
+
     // Check if user already exists
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
       return res.status(400).json({
         success: false,
@@ -35,10 +52,10 @@ const signup = async (req, res) => {
     // Create user
     const user = await User.create({
       name,
-      email,
+      email: normalizedEmail,
       password,
-      phone,
-      currentLocation: currentLocation || { coordinates: [0, 0] },
+      phone: normalizedPhone,
+      currentLocation: currentLocation || { type: 'Point', coordinates: [0, 0] },
       vehicle: vehicle || {}
     });
 
@@ -50,9 +67,15 @@ const signup = async (req, res) => {
           name: user.name,
           email: user.email,
           phone: user.phone,
+          role: user.role,
           vehicle: user.vehicle,
           token: generateToken(user._id)
         }
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to create user. Please try again.'
       });
     }
   } catch (error) {
@@ -70,10 +93,11 @@ const signup = async (req, res) => {
 // @access  Public
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+    const normalizedEmail = email?.trim().toLowerCase();
 
     // Validate fields
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({
         success: false,
         message: 'Please provide email and password'
@@ -81,7 +105,7 @@ const login = async (req, res) => {
     }
 
     // Check for user
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (user && (await user.comparePassword(password))) {
       res.json({
@@ -91,6 +115,7 @@ const login = async (req, res) => {
           name: user.name,
           email: user.email,
           phone: user.phone,
+          role: user.role,
           vehicle: user.vehicle,
           token: generateToken(user._id)
         }
@@ -152,6 +177,10 @@ const updateProfile = async (req, res) => {
       if (req.body.vehicle) {
         user.vehicle = req.body.vehicle;
       }
+      
+      if (req.body.vehicles) {
+        user.vehicles = req.body.vehicles;
+      }
 
       const updatedUser = await user.save();
 
@@ -162,7 +191,9 @@ const updateProfile = async (req, res) => {
           name: updatedUser.name,
           email: updatedUser.email,
           phone: updatedUser.phone,
+          role: updatedUser.role,
           vehicle: updatedUser.vehicle,
+          vehicles: updatedUser.vehicles,
           currentLocation: updatedUser.currentLocation
         }
       });
@@ -179,6 +210,47 @@ const updateProfile = async (req, res) => {
       message: 'Error updating profile',
       error: error.message
     });
+  }
+};
+
+// @desc    Get all users (Admin)
+// @route   GET /api/auth/users
+// @access  Private/Admin
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({}).select('-password');
+    res.json({ success: true, count: users.length, data: users });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error fetching users', error: error.message });
+  }
+};
+
+// @desc    Block or unblock a user (Admin)
+// @route   PUT /api/auth/users/:id/block
+// @access  Private/Admin
+const blockUser = async (req, res) => {
+  try {
+    const { blocked } = req.body;
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.isBlocked = blocked === true;
+    await user.save();
+
+    await sendNotification({
+      user,
+      type: user.isBlocked ? 'USER_BLOCKED' : 'USER_UNBLOCKED',
+      message: `Your booking privileges have been ${user.isBlocked ? 'blocked' : 'restored'}.`
+    });
+
+    res.json({ success: true, message: `User ${user.isBlocked ? 'blocked' : 'unblocked'} successfully`, data: user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error updating user status', error: error.message });
   }
 };
 
@@ -208,5 +280,7 @@ module.exports = {
   login,
   getProfile,
   updateProfile,
-  logout
+  logout,
+  getAllUsers,
+  blockUser
 };

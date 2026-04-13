@@ -73,8 +73,8 @@ db.once('open', async () => {
           {
             locationId: location._id,
             slotNumber: 'SAMPLE-003',
-            vehicleType: 'bike',
-            pricePerHour: 20,
+            vehicleType: 'car',
+            pricePerHour: 50,
             floor: 'Ground',
             isAvailable: true
           },
@@ -122,8 +122,8 @@ db.once('open', async () => {
           {
             locationId: location._id,
             slotNumber: 'SAMPLE-1F-02',
-            vehicleType: 'bike',
-            pricePerHour: 25,
+            vehicleType: 'car',
+            pricePerHour: 60,
             floor: 'First',
             isAvailable: true
           },

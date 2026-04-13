@@ -92,6 +92,29 @@ const MyBookings = () => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: 'var(--spacing-xl)' }}>
                 {bookings.map((booking) => (
                   <div key={booking._id} className="card card-glass" style={{ display: 'flex', flexDirection: 'column' }}>
+                    {(() => {
+                      const latestNotification = booking.notificationLog?.length
+                        ? booking.notificationLog[booking.notificationLog.length - 1]
+                        : null;
+                      return latestNotification ? (
+                        <div style={{
+                          marginBottom: 'var(--spacing-md)',
+                          padding: '0.65rem',
+                          borderRadius: '0.75rem',
+                          background: latestNotification.status === 'failed'
+                            ? 'rgba(239,68,68,0.12)'
+                            : 'rgba(34,197,94,0.12)',
+                          border: `1px solid ${latestNotification.status === 'failed' ? 'rgba(239,68,68,0.35)' : 'rgba(34,197,94,0.35)'}`
+                        }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                            Notification Status: {latestNotification.status === 'failed' ? 'Delivery failed' : 'Delivered'}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                            Last alert via {latestNotification.channel} ({latestNotification.provider})
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
                     {/* Status Badge */}
                     <div style={{ marginBottom: 'var(--spacing-lg)' }}>
                       {getStatusBadge(booking)}
@@ -158,6 +181,21 @@ const MyBookings = () => {
                           <p style={{ margin: 0, fontWeight: '500', color: booking.paymentStatus === 'paid' ? 'var(--accent)' : 'rgba(255,255,255,0.7)' }}>
                             {booking.paymentStatus === 'paid' ? '✓ Paid' : 'Pending'}
                           </p>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--spacing-md)' }}>
+                        <span style={{ fontSize: '1.25rem' }}>🔔</span>
+                        <div style={{ width: '100%' }}>
+                          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', margin: '0 0 0.25rem 0' }}>Notification History</p>
+                          <p style={{ margin: '0 0 0.25rem 0', fontWeight: '500' }}>
+                            {booking.notificationLog?.length || 0} updates sent
+                          </p>
+                          {booking.notificationLog?.slice(-2).reverse().map((n, idx) => (
+                            <p key={`${booking._id}-notif-${idx}`} style={{ margin: 0, fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)' }}>
+                              {n.type} via {n.channel} ({n.status}) - {new Date(n.sentAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                            </p>
+                          ))}
                         </div>
                       </div>
                     </div>

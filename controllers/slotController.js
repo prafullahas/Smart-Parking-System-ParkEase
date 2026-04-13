@@ -1,5 +1,77 @@
 const Slot = require('../models/Slot');
 const Location = require('../models/Location');
+const Booking = require('../models/Booking');
+const mongoose = require('mongoose');
+const { deriveSlotState } = require('../utils/slotState');
+
+const enrichSlotStates = async (slots) => {
+  if (!slots || slots.length === 0) return slots;
+
+  const slotIds = slots.map((slot) => slot._id);
+  const slotNumbers = slots.map((slot) => slot.slotNumber);
+  const now = new Date();
+
+  const activeBookings = await Booking.find({
+    slotId: { $in: slotIds },
+    status: 'active',
+    endTime: { $gt: now }
+  }).select('slotId checkInTime');
+
+  const bookingMap = {};
+  activeBookings.forEach((booking) => {
+    bookingMap[booking.slotId.toString()] = booking;
+  });
+
+  const sensorDocs = await mongoose.connection
+    .collection('bookings')
+    .find({ 
+      slot_number: { $in: slotNumbers },
+      is_parked: { $exists: true } // Only get sensor documents, not booking documents
+    })
+    .sort({ timestamp: -1 })
+    .toArray();
+
+  const latestSensorBySlot = {};
+  sensorDocs.forEach((doc) => {
+    if (!latestSensorBySlot[doc.slot_number]) {
+      latestSensorBySlot[doc.slot_number] = doc;
+    }
+  });
+
+  return slots.map((slot) => {
+    const slotObj = slot.toObject ? slot.toObject() : { ...slot };
+    const booking = bookingMap[slot._id.toString()];
+    const sensorState = latestSensorBySlot[slot.slotNumber];
+    const sensorParked = sensorState?.is_parked === true;
+    const hasActiveBooking = Boolean(booking);
+
+    slotObj.slotState = deriveSlotState({
+      currentSlotState: slotObj.slotState,
+      hasActiveBooking,
+      checkInTime: booking?.checkInTime || null,
+      sensorParked,
+      sensorVehicleNumber: sensorState?.vehicle_number || null,
+      bookedVehicleNumber: booking?.vehicleNumber || null
+    });
+
+    if (sensorState) {
+      slotObj.sensorStatus = {
+        isParked: sensorState.is_parked === true,
+        timestamp: sensorState.timestamp || null,
+        vehicleNumber: sensorState.vehicle_number || null
+      };
+    }
+
+    if (hasActiveBooking) {
+      slotObj.currentBooking = {
+        checkInTime: booking.checkInTime,
+        vehicleNumber: booking.vehicleNumber
+      };
+    }
+
+    return slotObj;
+  });
+};
 
 // @desc    Get all slots for a location
 // @route   GET /api/slots/location/:locationId
@@ -30,10 +102,12 @@ const getSlotsByLocation = async (req, res) => {
       .populate('locationId', 'name address')
       .sort({ slotNumber: 1 });
 
+    const enrichedSlots = await enrichSlotStates(slots);
+
     res.json({
       success: true,
-      count: slots.length,
-      data: slots
+      count: enrichedSlots.length,
+      data: enrichedSlots
     });
   } catch (error) {
     console.error(error);
@@ -68,10 +142,12 @@ const getAvailableSlots = async (req, res) => {
       .populate('locationId', 'name address')
       .sort({ slotNumber: 1 });
 
+    const enrichedSlots = await enrichSlotStates(slots);
+
     res.json({
       success: true,
-      count: slots.length,
-      data: slots
+      count: enrichedSlots.length,
+      data: enrichedSlots
     });
   } catch (error) {
     console.error(error);
@@ -130,23 +206,23 @@ const getFloorDetails = async (req, res) => {
 
     // Organize slots by row
     const slotsByRow = {};
-    const rows = [...new Set(slots.map(slot => slot.row))].sort();
+    const enrichedSlots = await enrichSlotStates(slots);
+    const rows = [...new Set(enrichedSlots.map(slot => slot.row))].sort();
     
     rows.forEach(row => {
-      slotsByRow[row] = slots.filter(slot => slot.row === row)
+      slotsByRow[row] = enrichedSlots.filter(slot => slot.row === row)
         .sort((a, b) => a.position - b.position);
     });
 
     // Calculate statistics
     const stats = {
-      total: slots.length,
-      available: slots.filter(s => s.isAvailable).length,
-      booked: slots.filter(s => !s.isAvailable).length,
-      handicapped: slots.filter(s => s.isHandicapped).length,
-      nearEntrance: slots.filter(s => s.isNearEntrance).length,
-      nearExit: slots.filter(s => s.isNearExit).length,
-      carSlots: slots.filter(s => s.vehicleType === 'car').length,
-      bikeSlots: slots.filter(s => s.vehicleType === 'bike').length
+      total: enrichedSlots.length,
+      available: enrichedSlots.filter(s => s.isAvailable).length,
+      booked: enrichedSlots.filter(s => !s.isAvailable).length,
+      handicapped: enrichedSlots.filter(s => s.isHandicapped).length,
+      nearEntrance: enrichedSlots.filter(s => s.isNearEntrance).length,
+      nearExit: enrichedSlots.filter(s => s.isNearExit).length,
+      carSlots: enrichedSlots.filter(s => s.vehicleType === 'car').length
     };
 
     res.json({
@@ -155,7 +231,7 @@ const getFloorDetails = async (req, res) => {
       rows: rows,
       slotsByRow,
       stats,
-      data: slots
+      data: enrichedSlots
     });
   } catch (error) {
     console.error(error);
@@ -182,9 +258,11 @@ const getSlotById = async (req, res) => {
       });
     }
 
+    const [enrichedSlot] = await enrichSlotStates([slot]);
+
     res.json({
       success: true,
-      data: slot
+      data: enrichedSlot
     });
   } catch (error) {
     console.error(error);
@@ -201,10 +279,10 @@ const getSlotById = async (req, res) => {
 // @access  Private/Admin
 const createSlot = async (req, res) => {
   try {
-    const { locationId, slotNumber, vehicleType, pricePerHour, floor, row, position, isPremium, isHandicapped, isNearEntrance, isNearExit, isNearLift } = req.body;
+    const { locationId, slotNumber, pricePerHour, floor, row, position, isPremium, isHandicapped, isNearEntrance, isNearExit, isNearLift } = req.body;
 
     // Validate required fields
-    if (!locationId || !slotNumber || !vehicleType || !pricePerHour || !row || !position) {
+    if (!locationId || !slotNumber || !pricePerHour || !row || !position) {
       return res.status(400).json({
         success: false,
         message: 'Please provide all required fields'
@@ -232,7 +310,7 @@ const createSlot = async (req, res) => {
     const slot = await Slot.create({
       locationId,
       slotNumber,
-      vehicleType,
+      vehicleType: 'car',
       pricePerHour,
       floor: floor || 'Ground',
       row,
@@ -263,10 +341,10 @@ const createSlot = async (req, res) => {
 // @access  Private/Admin
 const createBulkSlots = async (req, res) => {
   try {
-    const { locationId, slotPrefix, startNumber, endNumber, vehicleType, pricePerHour, floor, row, isPremium, isHandicapped, isNearEntrance, isNearExit, isNearLift } = req.body;
+    const { locationId, slotPrefix, startNumber, endNumber, pricePerHour, floor, row, isPremium, isHandicapped, isNearEntrance, isNearExit, isNearLift } = req.body;
 
     // Validate required fields
-    if (!locationId || !slotPrefix || !startNumber || !endNumber || !vehicleType || !pricePerHour || !row) {
+    if (!locationId || !slotPrefix || !startNumber || !endNumber || !pricePerHour || !row) {
       return res.status(400).json({
         success: false,
         message: 'Please provide all required fields'
@@ -287,7 +365,7 @@ const createBulkSlots = async (req, res) => {
       slots.push({
         locationId,
         slotNumber: `${slotPrefix}${i}`,
-        vehicleType,
+        vehicleType: 'car',
         pricePerHour,
         floor: floor || 'Ground',
         row,
@@ -334,6 +412,7 @@ const updateSlotStatus = async (req, res) => {
     }
 
     slot.isAvailable = isAvailable;
+    slot.slotState = isAvailable ? 'NOT_BOOKED' : (slot.slotState === 'NOT_BOOKED' ? 'BOOKED' : slot.slotState);
     await slot.save();
 
     // Update location available slots count
@@ -375,9 +454,11 @@ const updateSlot = async (req, res) => {
       });
     }
 
+    const payload = { ...req.body, vehicleType: 'car' };
+
     const updatedSlot = await Slot.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      payload,
       { new: true, runValidators: true }
     );
 
@@ -425,6 +506,58 @@ const deleteSlot = async (req, res) => {
   }
 };
 
+// @desc    Get all slots overview for admin
+// @route   GET /api/slots/admin/overview
+// @access  Private/Admin
+const getAdminSlotsOverview = async (req, res) => {
+  try {
+    // Get all locations
+    const locations = await Location.find({});
+
+    const overview = [];
+
+    for (const location of locations) {
+      // Get all slots for this location
+      const slots = await Slot.find({ locationId: location._id });
+
+      // Enrich slots with current state
+      const enrichedSlots = await enrichSlotStates(slots);
+
+      // Count slots by state
+      const stats = {
+        total: enrichedSlots.length,
+        notBooked: enrichedSlots.filter(s => s.slotState === 'NOT_BOOKED').length,
+        booked: enrichedSlots.filter(s => s.slotState === 'BOOKED').length,
+        arrived: enrichedSlots.filter(s => s.slotState === 'ARRIVED').length,
+        expired: enrichedSlots.filter(s => s.slotState === 'EXPIRED').length,
+      carSlots: enrichedSlots.filter(s => s.vehicleType === 'car').length
+      };
+
+      overview.push({
+        locationId: location._id,
+        locationName: location.name,
+        address: location.address,
+        totalSlots: location.totalSlots,
+        availableSlots: location.availableSlots,
+        stats,
+        slots: enrichedSlots
+      });
+    }
+
+    res.json({
+      success: true,
+      data: overview
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching admin overview',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getSlotsByLocation,
   getAvailableSlots,
@@ -435,5 +568,6 @@ module.exports = {
   createBulkSlots,
   updateSlotStatus,
   updateSlot,
-  deleteSlot
+  deleteSlot,
+  getAdminSlotsOverview
 };

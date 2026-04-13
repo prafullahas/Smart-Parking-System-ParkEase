@@ -45,10 +45,6 @@ const locationSchema = new mongoose.Schema({
     car: {
       type: Number,
       default: 50
-    },
-    bike: {
-      type: Number,
-      default: 20
     }
   },
   operatingHours: {

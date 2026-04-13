@@ -9,7 +9,7 @@ const Home = () => {
     slots: 0,
     bookings: 0
   });
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode] = useState(true);
 
   useEffect(() => {
     setTimeout(() => {
@@ -118,7 +118,7 @@ const Home = () => {
             letterSpacing: '1px',
             textShadow: '0 2px 10px rgba(0, 0, 0, 0.5)'
           }}>
-            Smart Parking Simplified
+            Smart Parking System
           </h2>
           <p style={{
             fontSize: '1.2rem',

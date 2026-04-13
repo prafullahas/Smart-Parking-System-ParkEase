@@ -4,10 +4,12 @@
   "description": "Smart Parking Management System Backend API",
   "main": "server.js",
   "scripts": {
-    "start": "node server-mock.js",
-    "dev": "node server-mock.js",
+    "start": "node server.js",
+    "dev": "node server.js",
+    "mock": "node server-mock.js",
     "seed": "node utils/seedData.js",
-    "seed:slots": "node utils/seedSlotsWithLayout.js"
+    "seed:slots": "node utils/seedSlotsWithLayout.js",
+    "migrate:slots:car": "node utils/migrateSlotsToCar.js"
   },
   "keywords": [
     "parking",
@@ -25,7 +27,11 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
-    "qrcode": "^1.5.3"
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.5",
+    "qrcode": "^1.5.3",
+    "stripe": "^22.0.1",
+    "twilio": "^5.13.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

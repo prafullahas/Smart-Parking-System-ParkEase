@@ -8,16 +8,16 @@ const {
   deleteLocation,
   getNearbyLocations
 } = require('../controllers/locationController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, admin } = require('../middleware/authMiddleware');
 
 // Public routes
 router.get('/', getAllLocations);
 router.get('/nearby', getNearbyLocations);
 router.get('/:id', getLocationById);
 
-// Protected routes (can be admin-only with additional middleware)
-router.post('/', protect, createLocation);
-router.put('/:id', protect, updateLocation);
-router.delete('/:id', protect, deleteLocation);
+// Admin routes
+router.post('/', protect, admin, createLocation);
+router.put('/:id', protect, admin, updateLocation);
+router.delete('/:id', protect, admin, deleteLocation);
 
 module.exports = router;

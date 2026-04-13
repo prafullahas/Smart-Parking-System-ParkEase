@@ -38,7 +38,7 @@ const Login = () => {
     }
 
     try {
-      const response = await api.post('/auth/login', { email, password });
+      const response = await api.post('/auth/login', { email: email.trim().toLowerCase(), password });
       
       if (response.data.success) {
         setSuccess('Login successful! Redirecting...');
@@ -46,11 +46,16 @@ const Login = () => {
         localStorage.setItem('user', JSON.stringify(response.data.data));
         
         setTimeout(() => {
-          navigate('/dashboard');
+          // Redirect based on user role
+          if (response.data.data.role === 'admin') {
+            navigate('/admin-dashboard');
+          } else {
+            navigate('/dashboard');
+          }
         }, 500);
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Login failed. Please try again.';
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Login failed. Please try again.';
       setError(errorMessage);
       console.error('Login error:', err);
     } finally {

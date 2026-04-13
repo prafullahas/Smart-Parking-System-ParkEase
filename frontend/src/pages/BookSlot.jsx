@@ -7,8 +7,8 @@ import '../App.css';
 const BookSlot = () => {
   const [locationData, setLocationData] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [vehicleType, setVehicleType] = useState('car');
   const [vehicleNumber, setVehicleNumber] = useState('');
+  const vehicleType = 'car';
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('09:00');
   const [duration, setDuration] = useState(1);
@@ -32,7 +32,7 @@ const BookSlot = () => {
       try {
         const locationResponse = await api.get(`/locations/${locationId}`);
         setLocationData(locationResponse.data.data);
-      } catch (err) {
+      } catch {
         setError('Failed to load location. Please try again.');
       } finally {
         setLoading(false);
@@ -41,6 +41,22 @@ const BookSlot = () => {
 
     fetchData();
   }, [locationId]);
+
+  // Poll for slot availability updates every 30 seconds when viewing slots
+  useEffect(() => {
+    if (!showSlots || !locationId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const locationResponse = await api.get(`/locations/${locationId}`);
+        setLocationData(locationResponse.data.data);
+      } catch (err) {
+        console.error('Failed to refresh slot data:', err);
+      }
+    }, 5000); // 5 seconds for near real-time updates
+
+    return () => clearInterval(interval);
+  }, [showSlots, locationId]);
 
   const handleProceedToSelectSlot = () => {
     if (!vehicleNumber) {
@@ -127,18 +143,7 @@ const BookSlot = () => {
           }}>
             <div className="form-group">
               <label className="form-label">🚗 Vehicle Type</label>
-              <select 
-                value={vehicleType} 
-                onChange={(e) => {
-                  setVehicleType(e.target.value);
-                  setSelectedSlot(null);
-                }}
-                disabled={showSlots}
-                className="form-input"
-              >
-                <option value="car">Car</option>
-                <option value="bike">Bike</option>
-              </select>
+              <input value="Car" disabled className="form-input" />
             </div>
             
             <div className="form-group">
@@ -220,18 +225,42 @@ const BookSlot = () => {
               Select a Slot (Estimated Cost: ₹{selectedSlot ? selectedSlot.pricePerHour * duration : locationData?.pricePerHour.car * duration})
             </h3>
             
+            <div className="booking-legend" style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-md)', fontSize: '0.85rem', color: 'var(--gray-400)' }}>
+              <span><span className="legend-swatch legend-not-booked" /> Open</span>
+              <span><span className="legend-swatch legend-booked" /> Booked</span>
+              <span><span className="legend-swatch legend-arrived" /> Arrived</span>
+            </div>
+
             <div className="booking-grid">
-              {locationData?.slots?.filter(s => s.vehicleType === vehicleType && s.isAvailable)?.map((slot) => (
-                <div
-                  key={slot._id}
-                  className={`booking-slot-card ${slot.isAvailable ? 'available' : 'occupied'} ${selectedSlot?._id === slot._id ? 'selected' : ''}`}
-                  onClick={() => slot.isAvailable && setSelectedSlot(slot)}
-                >
-                  <div className="booking-slot-number">{slot.slotNumber}</div>
-                  <div className="booking-slot-price">₹{slot.pricePerHour}/hr</div>
-                  {slot.isPremium && <div style={{ fontSize: '0.8rem', color: 'var(--warning)' }}>⭐ Premium</div>}
-                </div>
-              ))}
+              {locationData?.slots?.filter(s => s.vehicleType === vehicleType)?.map((slot) => {
+                const state = slot.slotState || (slot.isAvailable ? 'NOT_BOOKED' : 'BOOKED');
+                const canSelect = state === 'NOT_BOOKED';
+                const isSelected = selectedSlot?._id === slot._id;
+                const booking = slot.currentBooking;
+                const stateClass =
+                  state === 'NOT_BOOKED' ? 'state-not-booked' : state === 'BOOKED' ? 'state-booked' : 'state-arrived';
+
+                return (
+                  <div
+                    key={slot._id}
+                    className={`booking-slot-card ${stateClass} ${isSelected ? 'selected' : ''}`}
+                    onClick={() => canSelect && setSelectedSlot(slot)}
+                    style={{ cursor: canSelect ? 'pointer' : 'not-allowed' }}
+                  >
+                    <div className="booking-slot-number">{slot.slotNumber}</div>
+                    <div className="booking-slot-price">₹{slot.pricePerHour}/hr</div>
+                    <div className="booking-slot-state-label">
+                      {state === 'NOT_BOOKED' ? 'Open' : state === 'BOOKED' ? 'Booked' : 'Arrived'}
+                    </div>
+                    {slot.isPremium && <div style={{ fontSize: '0.8rem', color: 'var(--warning)' }}>⭐ Premium</div>}
+                    {!canSelect && booking && state === 'BOOKED' && (
+                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)', marginTop: '0.25rem' }}>
+                        ⏰ Free at {new Date(booking.endTime).toLocaleTimeString()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {selectedSlot && (

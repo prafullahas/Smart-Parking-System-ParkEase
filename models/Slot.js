@@ -15,10 +15,16 @@ const slotSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  /** NOT_BOOKED → BOOKED → ARRIVED → EXPIRED (synced on booking / check-in / release) */
+  slotState: {
+    type: String,
+    enum: ['NOT_BOOKED', 'BOOKED', 'ARRIVED', 'EXPIRED'],
+    default: 'NOT_BOOKED'
+  },
   vehicleType: {
     type: String,
     required: [true, 'Vehicle type is required'],
-    enum: ['car', 'bike']
+    enum: ['car']
   },
   pricePerHour: {
     type: Number,

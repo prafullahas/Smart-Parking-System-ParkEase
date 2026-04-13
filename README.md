@@ -20,7 +20,9 @@
     <ul>
       <li>Real-time slot availability</li>
       <li>Book and manage reservations</li>
-      <li>QR Code based entry pass</li>
+      <li>Secure payment gateway integration (Stripe)</li>
+      <li>QR Code based entry pass with comprehensive booking details</li>
+      <li>Automatic slot release upon booking expiration</li>
       <li>User authentication</li>
       <li>Location-based parking suggestions</li>
     </ul>
@@ -30,6 +32,7 @@
       <li>Manage parking slots</li>
       <li>Monitor bookings</li>
       <li>View occupancy statistics</li>
+      <li>Real-time booking management</li>
     </ul>
   </div>
 
@@ -38,9 +41,9 @@
   <h2>Tech Stack</h2>
 
   <p style="max-width: 600px; margin: auto; font-size: 15px; line-height: 1.6; color: #444;">
-    <strong>Frontend:</strong> React.js, Vite, Tailwind CSS <br/>
-    <strong>Backend:</strong> Node.js, Express.js, MongoDB <br/>
-    <strong>Additional:</strong> JWT Auth, QR Generator, Maps API (future)
+    <strong>Frontend:</strong> React.js, Vite, Tailwind CSS, Stripe Elements <br/>
+    <strong>Backend:</strong> Node.js, Express.js, MongoDB, Stripe API <br/>
+    <strong>Additional:</strong> JWT Auth, QR Generator, Node-cron Scheduler, Maps API (future)
   </p>
 
   <hr style="width: 60%; margin: 30px auto;" />
@@ -50,8 +53,10 @@
   <p style="max-width: 600px; margin: auto; font-size: 15px; line-height: 1.6; color: #444;">
     1. User selects a location <br/>
     2. System displays available slots <br/>
-    3. User books a slot and receives a QR code <br/>
-    4. QR is scanned at the parking gate for verification
+    3. User books a slot and completes secure payment via Stripe <br/>
+    4. User receives a comprehensive QR code ticket with all booking details <br/>
+    5. QR is scanned at the parking gate for verification <br/>
+    6. System automatically releases slot when booking expires
   </p>
 
   <hr style="width: 60%; margin: 30px auto;" />
@@ -59,17 +64,39 @@
   <h2>Installation</h2>
 
   <div style="text-align: left; max-width: 600px; margin: auto; font-size: 14px; color: #444;">
+    <strong>Prerequisites</strong><br/>
+    • Node.js (v14 or higher)<br/>
+    • MongoDB database<br/>
+    • Stripe account for payment processing<br/><br/>
+
     <strong>Clone Repository</strong><br/>
     <pre>git clone https://github.com/Harshita1325/Smart_Parking_System-Parkease.git
 cd Smart_Parking_System-Parkease</pre>
 
+    <strong>Environment Setup</strong><br/>
+    <pre># Backend .env
+cp .env.example .env
+# Add your MongoDB URI, JWT secret, and Stripe keys
+
+# Frontend .env
+cd frontend
+cp .env.example .env
+# Add your Stripe publishable key</pre>
+
+    <strong>Stripe Setup</strong><br/>
+    <pre>1. Create a Stripe account at https://stripe.com
+2. Get your API keys from the dashboard
+3. Add STRIPE_SECRET_KEY to backend .env
+4. Add VITE_STRIPE_PUBLISHABLE_KEY to frontend .env</pre>
+
+    <strong>Installation</strong><br/>
     <strong>Frontend Setup</strong><br/>
     <pre>cd frontend
 npm install
 npm run dev</pre>
 
     <strong>Backend Setup</strong><br/>
-    <pre>cd backend
+    <pre>cd ..
 npm install
 npm start</pre>
   </div>
@@ -83,14 +110,23 @@ npm start</pre>
     • POST /api/auth/register – Register user<br/>
     • POST /api/auth/login – Login user<br/><br/>
 
+    <strong>Locations</strong><br/>
+    • GET /api/locations – Get all locations<br/>
+    • GET /api/locations/:id – Get location details<br/><br/>
+
     <strong>Slots</strong><br/>
     • GET /api/slots – Get all slots<br/>
     • POST /api/slots – Add new slot (Admin)<br/><br/>
 
     <strong>Bookings</strong><br/>
-    • POST /api/book – Book a slot<br/>
-    • GET /api/book/:id – Get booking details<br/>
-    • DELETE /api/book/:id – Cancel booking<br/>
+    • POST /api/bookings/create-payment-intent – Create Stripe payment intent<br/>
+    • POST /api/bookings – Create booking with payment<br/>
+    • GET /api/bookings/my-bookings – Get user's bookings<br/>
+    • GET /api/bookings/:id – Get booking details<br/>
+    • PUT /api/bookings/:id/cancel – Cancel booking<br/>
+    • PUT /api/bookings/:id/checkin – Check-in to booking<br/>
+    • PUT /api/bookings/:id/checkout – Check-out from booking<br/>
+    • POST /api/bookings/complete-expired – Complete expired bookings (Admin)<br/>
   </p>
 
   <hr style="width: 60%; margin: 30px auto;" />

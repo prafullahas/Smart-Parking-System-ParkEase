@@ -1,5 +1,10 @@
 const Location = require('../models/Location');
 const Slot = require('../models/Slot');
+const Booking = require('../models/Booking');
+const mongoose = require('mongoose');
+const { deriveSlotState } = require('../utils/slotState');
+
+const MMCOE_LOCATION_NAME = 'MMCOE Campus Parking';
 
 // @desc    Get all locations
 // @route   GET /api/locations
@@ -22,7 +27,10 @@ const getAllLocations = async (req, res) => {
       ];
     }
 
-    const locations = await Location.find(query).sort({ name: 1 });
+    const locations = await Location.find({
+      ...query,
+      name: MMCOE_LOCATION_NAME
+    }).sort({ name: 1 });
 
     res.json({
       success: true,
@@ -44,7 +52,10 @@ const getAllLocations = async (req, res) => {
 // @access  Public
 const getLocationById = async (req, res) => {
   try {
-    const location = await Location.findById(req.params.id);
+    const location = await Location.findOne({
+      _id: req.params.id,
+      name: MMCOE_LOCATION_NAME
+    });
 
     if (!location) {
       return res.status(404).json({
@@ -53,15 +64,88 @@ const getLocationById = async (req, res) => {
       });
     }
 
-    // Get slots for this location
-    const slots = await Slot.find({ locationId: location._id });
-    const availableSlots = slots.filter(slot => slot.isAvailable).length;
+    // Get slots for this location with booking info for occupied slots
+    const slots = await Slot.find({ locationId: location._id })
+      .sort({ slotNumber: 1 });
+    
+    // Get active bookings by current time window.
+    const now = new Date();
+    const slotIds = slots.map(slot => slot._id);
+    const activeBookings = await Booking.find({
+      slotId: { $in: slotIds },
+      status: 'active',
+      startTime: { $lte: now },
+      endTime: { $gt: now }
+    }).select('slotId endTime vehicleNumber checkInTime');
+
+    // Create a map of slotId to booking info
+    const bookingMap = {};
+    activeBookings.forEach(booking => {
+      bookingMap[booking.slotId.toString()] = {
+        endTime: booking.endTime,
+        vehicleNumber: booking.vehicleNumber,
+        checkInTime: booking.checkInTime
+      };
+    });
+
+    // Read latest sensor states for all slots:
+    // {_id, slot_number, is_parked, vehicle_number, timestamp}
+    const slotNumbers = slots.map(slot => slot.slotNumber);
+    const sensorDocs = await mongoose.connection
+      .collection('bookings')
+      .find({ 
+        slot_number: { $in: slotNumbers },
+        is_parked: { $exists: true } // Only get sensor documents, not booking documents
+      })
+      .sort({ timestamp: -1 })
+      .toArray();
+
+    const latestSensorBySlot = {};
+    sensorDocs.forEach((doc) => {
+      if (!latestSensorBySlot[doc.slot_number]) {
+        latestSensorBySlot[doc.slot_number] = doc;
+      }
+    });
+
+    // Availability is computed in real time:
+    // available if no active booking AND sensor is not parked.
+    const slotsWithBookingInfo = slots.map(slot => {
+      const slotObj = slot.toObject();
+      const hasActiveBooking = Boolean(bookingMap[slot._id.toString()]);
+      const sensorState = latestSensorBySlot[slot.slotNumber];
+      const sensorParked = sensorState?.is_parked === true;
+      const b = bookingMap[slot._id.toString()];
+
+      slotObj.isAvailable = !hasActiveBooking && !sensorParked;
+      slotObj.slotState = deriveSlotState({
+        currentSlotState: slotObj.slotState,
+        hasActiveBooking,
+        checkInTime: b?.checkInTime || null,
+        sensorParked,
+        sensorVehicleNumber: sensorState?.vehicle_number || null,
+        bookedVehicleNumber: b?.vehicleNumber || null
+      });
+
+      if (hasActiveBooking) {
+        slotObj.currentBooking = bookingMap[slot._id.toString()];
+      }
+      if (sensorState) {
+        slotObj.sensorStatus = {
+          isParked: sensorState.is_parked === true,
+          timestamp: sensorState.timestamp || null,
+          vehicleNumber: sensorState.vehicle_number || null
+        };
+      }
+      return slotObj;
+    });
+
+    const availableSlots = slotsWithBookingInfo.filter(slot => slot.isAvailable).length;
 
     res.json({
       success: true,
       data: {
         ...location.toObject(),
-        slots: slots,
+        slots: slotsWithBookingInfo,
         actualAvailableSlots: availableSlots
       }
     });
@@ -98,7 +182,7 @@ const createLocation = async (req, res) => {
       floors,
       availableSlots: totalSlots,
       type,
-      pricePerHour: pricePerHour || { car: 50, bike: 20 }
+      pricePerHour: pricePerHour || { car: 50 }
     });
 
     res.status(201).json({

@@ -14,21 +14,43 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email']
   },
+  phone: {
+    type: String,
+    required: [true, 'Please provide a phone number'],
+    trim: true
+  },
   password: {
     type: String,
     required: [true, 'Please provide a password'],
     minlength: 6
   },
-  phone: {
+  role: {
     type: String,
-    required: [true, 'Please provide a phone number'],
-    match: [/^[0-9]{10}$/, 'Please provide a valid 10-digit phone number']
+    enum: ['user', 'admin'],
+    default: 'user'
   },
+  isBlocked: {
+    type: Boolean,
+    default: false
+  },
+  vehicles: [{
+    vehicleType: {
+      type: String,
+      enum: ['car'],
+      required: true
+    },
+    vehicleNumber: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true
+    }
+  }],
   vehicle: {
     type: {
       vehicleType: {
         type: String,
-        enum: ['car', 'bike'],
+        enum: ['car'],
         required: false
       },
       vehicleNumber: {

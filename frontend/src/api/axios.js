@@ -1,8 +1,19 @@
 import axios from 'axios';
 
+const resolveBaseURL = () => {
+  const envBaseURL = import.meta.env.VITE_API_BASE_URL;
+  if (envBaseURL && envBaseURL.trim()) {
+    return envBaseURL.trim();
+  }
+
+  // Dev: same-origin `/api` → Vite proxy → backend (see vite.config.js; default PORT is 5002 in server.js).
+  // Override with VITE_API_BASE_URL if your API runs elsewhere.
+  return '/api';
+};
+
 // Create an axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: resolveBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },

@@ -19,7 +19,7 @@ const bookingSchema = new mongoose.Schema({
   vehicleType: {
     type: String,
     required: [true, 'Vehicle type is required'],
-    enum: ['car', 'bike']
+    enum: ['car']
   },
   vehicleNumber: {
     type: String,
@@ -51,12 +51,12 @@ const bookingSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'success', 'failed', 'refunded'],
-    default: 'pending'
+    enum: ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED'],
+    default: 'PENDING'
   },
   paymentMethod: {
     type: String,
-    enum: ['credit_card', 'debit_card', 'upi', 'cash', 'wallet'],
+    enum: ['credit_card', 'debit_card', 'card', 'upi', 'netbanking', 'cash', 'wallet', 'later'],
     default: 'upi'
   },
   transactionId: {
@@ -69,8 +69,12 @@ const bookingSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'completed', 'cancelled'],
+    enum: ['active', 'completed', 'cancelled', 'expired'],
     default: 'active'
+  },
+  expiredAt: {
+    type: Date,
+    default: null
   },
   checkInTime: {
     type: Date,
@@ -83,7 +87,49 @@ const bookingSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  reminderFlags: {
+    paymentReminderSent: { type: Boolean, default: false },
+    late5MinSent: { type: Boolean, default: false },
+    late10MinSent: { type: Boolean, default: false },
+    noShowSent: { type: Boolean, default: false }
+  },
+  notificationLog: [{
+    type: {
+      type: String,
+      required: true
+    },
+    channel: {
+      type: String,
+      enum: ['email', 'phone', 'whatsapp'],
+      required: true
+    },
+    message: {
+      type: String,
+      required: true
+    },
+    sentAt: {
+      type: Date,
+      default: Date.now
+    },
+    status: {
+      type: String,
+      enum: ['sent', 'failed'],
+      default: 'sent'
+    },
+    provider: {
+      type: String,
+      default: 'unknown'
+    },
+    attempts: {
+      type: Number,
+      default: 1
+    },
+    error: {
+      type: String,
+      default: null
+    }
+  }]
 });
 
 // Index for faster queries

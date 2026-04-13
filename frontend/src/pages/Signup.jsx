@@ -21,12 +21,43 @@ const Signup = () => {
     setError('');
     setSuccess('');
 
+    if (!name.trim()) {
+      setError('Please enter your full name');
+      setLoading(false);
+      return;
+    }
+
+    if (!email.trim()) {
+      setError('Please enter your email address');
+      setLoading(false);
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[\w-.+]+@[\w-]+\.[\w-.]+$/.test(normalizedEmail)) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+
+    if (phone.length !== 10) {
+      setError('Phone number must be 10 digits');
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await api.post('/auth/signup', {
-        name,
-        email,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
         password,
-        phone
+        phone: phone.replace(/\D/g, '')
       });
       
       if (response.data.success) {
@@ -39,7 +70,7 @@ const Signup = () => {
         }, 500);
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Signup failed. Please try again.';
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Signup failed. Please try again.';
       setError(errorMessage);
       console.error('Signup error:', err);
     } finally {

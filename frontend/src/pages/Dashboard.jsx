@@ -9,19 +9,50 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
   const [slots, setSlots] = useState([]);
-  const [myBookings, setMyBookings] = useState([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [bookingDuration, setBookingDuration] = useState(1);
   const [vehicleNumber, setVehicleNumber] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedTime, setSelectedTime] = useState('09:00');
+  const [showSlotsView, setShowSlotsView] = useState(false);
+  const [filterDuration, setFilterDuration] = useState(1);
   const navigate = useNavigate();
+
+  const bookingEndTime = (() => {
+    const start = new Date(`${selectedDate}T${selectedTime}`);
+    if (Number.isNaN(start.getTime())) return '--';
+    start.setHours(start.getHours() + bookingDuration);
+    return start.toLocaleTimeString();
+  })();
+
+  const slotVisual = (state) => {
+    if (state === 'NOT_BOOKED') {
+      return {
+        bg: 'rgba(34, 197, 94, 0.15)',
+        border: 'rgba(34, 197, 94, 0.4)',
+        num: '#22c55e',
+        badgeBg: 'rgba(34, 197, 94, 0.25)',
+        badgeText: '#22c55e',
+        label: 'OPEN'
+      };
+    }
+
+    return {
+      bg: 'rgba(107, 114, 128, 0.12)',
+      border: 'rgba(107, 114, 128, 0.25)',
+      num: '#6b7280',
+      badgeBg: 'rgba(107, 114, 128, 0.18)',
+      badgeText: '#9ca3af',
+      label: 'UNAVAILABLE'
+    };
+  };
 
   // Initialize slots and fetch bookings
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         const userData = JSON.parse(localStorage.getItem('user'));
-        const savedSlots = JSON.parse(localStorage.getItem('mmcoe_parking_slots'));
         
         if (!userData) {
           navigate('/login');
@@ -29,28 +60,85 @@ const Dashboard = () => {
         }
         setUser(userData);
 
-        // Initialize 6 parking slots with saved state
-        const initialSlots = [
-          { id: 'A1', number: 'A1', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null },
-          { id: 'A2', number: 'A2', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null },
-          { id: 'A3', number: 'A3', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null },
-          { id: 'B1', number: 'B1', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null },
-          { id: 'B2', number: 'B2', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null },
-          { id: 'B3', number: 'B3', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null }
-        ];
-
-        // Use saved slots if available
-        const slotsToUse = savedSlots || initialSlots;
-        setSlots(slotsToUse);
+        // Fetch locations and slots from API
+        const locationsRes = await api.get('/locations');
+        if (locationsRes.data.success && locationsRes.data.data.length > 0) {
+          const firstLocation = locationsRes.data.data[0];
+          
+          // Fetch detailed location with slots
+          const locationRes = await api.get(`/locations/${firstLocation._id}`);
+          if (locationRes.data.success) {
+            const slotsData = locationRes.data.data.slots || [];
+            
+            // Transform API slots to component format
+            const formattedSlots = slotsData.map(slot => {
+              const st = slot.slotState || (slot.isAvailable ? 'NOT_BOOKED' : 'BOOKED');
+              return {
+                id: slot._id,
+                number: slot.slotNumber,
+                slotState: st,
+                booked: st !== 'NOT_BOOKED',
+                bookedUntil: slot.currentBooking?.endTime || null,
+                bookedBy: null,
+                bookedFor: null,
+                pricePerHour: slot.pricePerHour || 50,
+                vehicleType: slot.vehicleType || 'car',
+                locationId: firstLocation._id,
+                locationName: firstLocation.name
+              };
+            });
+            
+            setSlots(formattedSlots);
+          }
+        }
+        
         setLoading(false);
       } catch (err) {
-        console.error('Error:', err);
+        console.error('Error fetching data:', err);
+        // Fallback to mock data if API fails
+        const initialSlots = [
+          { id: 'A1', number: 'A1', slotState: 'NOT_BOOKED', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null, pricePerHour: 50, vehicleType: 'car', locationId: 'mock-location-1', locationName: 'Mock Parking Location' },
+          { id: 'A2', number: 'A2', slotState: 'NOT_BOOKED', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null, pricePerHour: 50, vehicleType: 'car', locationId: 'mock-location-1', locationName: 'Mock Parking Location' },
+          { id: 'A3', number: 'A3', slotState: 'NOT_BOOKED', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null, pricePerHour: 50, vehicleType: 'car', locationId: 'mock-location-1', locationName: 'Mock Parking Location' },
+          { id: 'B1', number: 'B1', slotState: 'NOT_BOOKED', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null, pricePerHour: 50, vehicleType: 'car', locationId: 'mock-location-1', locationName: 'Mock Parking Location' },
+          { id: 'B2', number: 'B2', slotState: 'NOT_BOOKED', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null, pricePerHour: 50, vehicleType: 'car', locationId: 'mock-location-1', locationName: 'Mock Parking Location' },
+          { id: 'B3', number: 'B3', slotState: 'NOT_BOOKED', booked: false, bookedUntil: null, bookedBy: null, bookedFor: null, pricePerHour: 50, vehicleType: 'car', locationId: 'mock-location-1', locationName: 'Mock Parking Location' }
+        ];
+        setSlots(initialSlots);
         setLoading(false);
       }
     };
 
     fetchUserData();
   }, [navigate]);
+
+  // Auto-release expired bookings every 30 seconds
+  useEffect(() => {
+    const releaseExpiredBookings = () => {
+      setSlots((prevSlots) => {
+        const now = new Date();
+        let updated = prevSlots.map((slot) => {
+          if (slot.booked && slot.bookedUntil && new Date(slot.bookedUntil) <= now) {
+            return {
+              ...slot,
+              slotState: 'NOT_BOOKED',
+              booked: false,
+              bookedUntil: null,
+              bookedBy: null,
+              bookedFor: null
+            };
+          }
+          return slot;
+        });
+
+        return updated;
+      });
+    };
+
+    releaseExpiredBookings();
+    const interval = setInterval(releaseExpiredBookings, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const getBookingDuration = (endTime) => {
     if (!endTime) return '';
@@ -67,11 +155,12 @@ const Dashboard = () => {
   };
 
   const handleSlotClick = (slot) => {
-    if (!slot.booked) {
+    const st = slot.slotState || 'NOT_BOOKED';
+    if (st === 'NOT_BOOKED') {
       setSelectedSlot(slot);
       setShowBookingModal(true);
       setVehicleNumber('');
-      setBookingDuration(1);
+      setBookingDuration(filterDuration); // Set initial duration to the selected filter duration
     }
   };
 
@@ -81,49 +170,85 @@ const Dashboard = () => {
       return;
     }
 
-    const bookedUntil = new Date(Date.now() + bookingDuration * 60 * 60 * 1000);
+    if (!selectedSlot) {
+      alert('Please select a slot');
+      return;
+    }
 
-    const updatedSlots = slots.map(slot => {
-      if (slot.id === selectedSlot.id) {
-        return {
-          ...slot,
-          booked: true,
-          bookedUntil: bookedUntil,
-          bookedBy: vehicleNumber,
-          bookedFor: bookingDuration
-        };
-      }
-      return slot;
-    });
-
-    setSlots(updatedSlots);
-    // Save to localStorage
-    localStorage.setItem('mmcoe_parking_slots', JSON.stringify(updatedSlots));
+    const bookingPayload = {
+      location: {
+        _id: selectedSlot.locationId,
+        name: selectedSlot.locationName || 'Parking Location',
+        address: 'Parking Location Address'
+      },
+      slot: {
+        _id: selectedSlot.id,
+        slotNumber: selectedSlot.number,
+        vehicleType: selectedSlot.vehicleType || 'car',
+        pricePerHour: selectedSlot.pricePerHour || 50
+      },
+      vehicleType: 'car',
+      vehicleNumber,
+      date: selectedDate,
+      time: selectedTime,
+      duration: bookingDuration,
+      amount: (selectedSlot.pricePerHour || 50) * bookingDuration
+    };
 
     setShowBookingModal(false);
     setSelectedSlot(null);
     setVehicleNumber('');
     setBookingDuration(1);
+    setSelectedDate(new Date().toISOString().slice(0, 10));
+    setSelectedTime('09:00');
+
+    navigate('/payment', { state: bookingPayload });
   };
 
-  const handleCancelBooking = (slotId) => {
-    const updatedSlots = slots.map(slot => {
-      if (slot.id === slotId) {
-        return {
-          ...slot,
-          booked: false,
-          bookedUntil: null,
-          bookedBy: null,
-          bookedFor: null
-        };
+  const handleShowSlots = (duration) => {
+    setFilterDuration(duration);
+    setShowSlotsView(true);
+  };
+
+  const handleBackToOverview = () => {
+    setShowSlotsView(false);
+    setFilterDuration(1);
+  };
+
+  useEffect(() => {
+    const refreshSlots = async () => {
+      try {
+        const locationsRes = await api.get('/locations');
+        if (!locationsRes.data.success || !locationsRes.data.data.length) return;
+        const firstLocation = locationsRes.data.data[0];
+        const locationRes = await api.get(`/locations/${firstLocation._id}`);
+        if (!locationRes.data.success) return;
+        const slotsData = locationRes.data.data.slots || [];
+        const formattedSlots = slotsData.map((slot) => {
+          const st = slot.slotState || (slot.isAvailable ? 'NOT_BOOKED' : 'BOOKED');
+          return {
+            id: slot._id,
+            number: slot.slotNumber,
+            slotState: st,
+            booked: st !== 'NOT_BOOKED',
+            bookedUntil: slot.currentBooking?.endTime || null,
+            bookedBy: null,
+            bookedFor: null,
+            pricePerHour: slot.pricePerHour || 50,
+            vehicleType: slot.vehicleType || 'car',
+            locationId: firstLocation._id,
+            locationName: firstLocation.name
+          };
+        });
+        setSlots(formattedSlots);
+      } catch (err) {
+        console.error('Failed to auto-refresh slots:', err);
       }
-      return slot;
-    });
+    };
 
-    setSlots(updatedSlots);
-    // Save to localStorage
-    localStorage.setItem('mmcoe_parking_slots', JSON.stringify(updatedSlots));
-  };
+    const interval = setInterval(refreshSlots, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   if (loading) {
     return (
@@ -229,248 +354,565 @@ const Dashboard = () => {
           </button>
         </div>
 
-        {/* Parking Slots Grid */}
+        {/* Main Content - Overview or Slots View */}
+        {!showSlotsView ? (
+          /* Overview View */
+          <div style={{
+            background: cardBg,
+            border: `1px solid ${cardBorder}`,
+            borderRadius: '1.5rem',
+            padding: '3rem 2.5rem',
+            backdropFilter: 'blur(10px)',
+            boxShadow: darkMode
+              ? '0 8px 32px rgba(0, 0, 0, 0.3)'
+              : '0 8px 32px rgba(0, 0, 0, 0.08)',
+            transition: 'all 0.3s ease'
+          }}>
+            {/* Welcome Message */}
+            <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+              <h2 style={{
+                fontSize: '2rem',
+                fontWeight: '700',
+                color: textColor,
+                marginBottom: '1rem'
+              }}>
+                🅿️ Parking Overview
+              </h2>
+              <p style={{
+                color: darkMode ? 'var(--gray-400)' : '#666',
+                fontSize: '1.1rem',
+                margin: '0'
+              }}>
+                Select booking duration to view available slots
+              </p>
+            </div>
+
+            {/* Duration Selection */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '2rem',
+              marginBottom: '3rem'
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{
+                  fontSize: '1.25rem',
+                  fontWeight: '600',
+                  color: textColor,
+                  marginBottom: '1rem'
+                }}>
+                  ⏱️ How long do you want to park?
+                </h3>
+                <div style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  justifyContent: 'center',
+                  flexWrap: 'wrap'
+                }}>
+                  {[1, 2, 3, 4, 6, 8, 12, 24].map((hours) => (
+                    <button
+                      key={hours}
+                      onClick={() => handleShowSlots(hours)}
+                      style={{
+                        padding: '1rem 1.5rem',
+                        background: darkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                        border: `1px solid ${cardBorder}`,
+                        borderRadius: '1rem',
+                        color: textColor,
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        minWidth: '80px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = 'rgba(0, 198, 255, 0.1)';
+                        e.target.style.border = '1px solid rgba(0, 198, 255, 0.3)';
+                        e.target.style.transform = 'translateY(-2px)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+                        e.target.style.border = `1px solid ${cardBorder}`;
+                        e.target.style.transform = 'translateY(0)';
+                      }}
+                    >
+                      {hours}h
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Current Statistics */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '2rem',
+              paddingTop: '2rem',
+              borderTop: `1px solid ${cardBorder}`
+            }}>
+              <div style={{
+                textAlign: 'center',
+                padding: '2rem 1rem',
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.2)',
+                borderRadius: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '3rem',
+                  fontWeight: '800',
+                  color: '#22c55e',
+                  marginBottom: '0.5rem'
+                }}>
+                  {slots.filter(s => (s.slotState || 'NOT_BOOKED') === 'NOT_BOOKED').length}
+                </div>
+                <p style={{
+                  color: darkMode ? 'var(--gray-300)' : '#333',
+                  fontSize: '1.1rem',
+                  fontWeight: '600',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  Available Slots
+                </p>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0'
+                }}>
+                  Ready for booking
+                </p>
+              </div>
+
+              <div style={{
+                textAlign: 'center',
+                padding: '2rem 1rem',
+                background: 'rgba(234, 179, 8, 0.1)',
+                border: '1px solid rgba(234, 179, 8, 0.2)',
+                borderRadius: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '3rem',
+                  fontWeight: '800',
+                  color: '#eab308',
+                  marginBottom: '0.5rem'
+                }}>
+                  {slots.filter(s => (s.slotState || '') === 'BOOKED').length}
+                </div>
+                <p style={{
+                  color: darkMode ? 'var(--gray-300)' : '#333',
+                  fontSize: '1.1rem',
+                  fontWeight: '600',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  Currently Booked
+                </p>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0'
+                }}>
+                  Reserved slots
+                </p>
+              </div>
+
+              <div style={{
+                textAlign: 'center',
+                padding: '2rem 1rem',
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                borderRadius: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '3rem',
+                  fontWeight: '800',
+                  color: '#3b82f6',
+                  marginBottom: '0.5rem'
+                }}>
+                  {slots.filter(s => (s.slotState || '') === 'ARRIVED').length}
+                </div>
+                <p style={{
+                  color: darkMode ? 'var(--gray-300)' : '#333',
+                  fontSize: '1.1rem',
+                  fontWeight: '600',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  Vehicles Parked
+                </p>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0'
+                }}>
+                  Occupied slots
+                </p>
+              </div>
+
+              <div style={{
+                textAlign: 'center',
+                padding: '2rem 1rem',
+                background: 'rgba(0, 198, 255, 0.1)',
+                border: '1px solid rgba(0, 198, 255, 0.2)',
+                borderRadius: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '3rem',
+                  fontWeight: '800',
+                  color: '#00c6ff',
+                  marginBottom: '0.5rem'
+                }}>
+                  {Math.round(((slots.filter(s => (s.slotState || 'NOT_BOOKED') === 'NOT_BOOKED').length) / Math.max(slots.length, 1)) * 100)}%
+                </div>
+                <p style={{
+                  color: darkMode ? 'var(--gray-300)' : '#333',
+                  fontSize: '1.1rem',
+                  fontWeight: '600',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  Availability
+                </p>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0'
+                }}>
+                  Parking utilization
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Slots View */
+          <div style={{
+            background: cardBg,
+            border: `1px solid ${cardBorder}`,
+            borderRadius: '1.5rem',
+            padding: '2.5rem',
+            backdropFilter: 'blur(10px)',
+            boxShadow: darkMode
+              ? '0 8px 32px rgba(0, 0, 0, 0.3)'
+              : '0 8px 32px rgba(0, 0, 0, 0.08)',
+            transition: 'all 0.3s ease'
+          }}>
+            {/* Back Button and Title */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '2rem',
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <div>
+                <button
+                  onClick={handleBackToOverview}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                    border: `1px solid ${cardBorder}`,
+                    borderRadius: '0.5rem',
+                    color: textColor,
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                  }}
+                >
+                  ← Back to Overview
+                </button>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <h2 style={{
+                  fontSize: '1.5rem',
+                  fontWeight: '700',
+                  color: textColor,
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  🚗 Available for {filterDuration} Hour{filterDuration !== 1 ? 's' : ''}
+                </h2>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0'
+                }}>
+                  {slots.filter(s => (s.slotState || 'NOT_BOOKED') === 'NOT_BOOKED').length} slots available
+                </p>
+              </div>
+            </div>
+
+            {/* 6 Slots in Horizontal Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: '1.5rem',
+              marginBottom: '2rem'
+            }}>
+              {slots.map((slot) => {
+                const st = slot.slotState || 'NOT_BOOKED';
+                const v = slotVisual(st);
+                const isOpen = st === 'NOT_BOOKED';
+                return (
+                <div
+                  key={slot.id}
+                  onClick={() => handleSlotClick(slot)}
+                  style={{
+                    background: v.bg,
+                    border: `2px solid ${v.border}`,
+                    borderRadius: '1.2rem',
+                    padding: '1.5rem 1rem',
+                    cursor: isOpen ? 'pointer' : 'default',
+                    transition: 'all 0.3s ease',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.75rem',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    animation: 'fadeInUp 0.5s ease backwards',
+                    aspectRatio: '1 / 1.1',
+                    opacity: isOpen ? 1 : 0.88
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isOpen) {
+                      e.currentTarget.style.transform = 'translateY(-4px)';
+                      e.currentTarget.style.boxShadow = darkMode
+                        ? '0 12px 24px rgba(34, 197, 94, 0.3)'
+                        : '0 12px 24px rgba(34, 197, 94, 0.15)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  {/* Slot Number */}
+                  <div style={{
+                    fontSize: '2rem',
+                    fontWeight: '900',
+                    color: v.num
+                  }}>
+                    {slot.number}
+                  </div>
+
+                  {/* Status Badge */}
+                  <div style={{
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: '20px',
+                    background: v.badgeBg,
+                    color: v.badgeText,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {v.label}
+                  </div>
+
+                  {/* Booking Duration */}
+                  {slot.booked && slot.bookedUntil && (
+                    <>
+                      <div style={{
+                        fontSize: '0.75rem',
+                        color: darkMode ? 'var(--gray-400)' : '#333',
+                        fontWeight: '500',
+                        textAlign: 'center',
+                        marginTop: '0.25rem'
+                      }}>
+                        ⏱️ {getBookingDuration(slot.bookedUntil)}
+                      </div>
+
+                      {/* Vehicle Number */}
+                      {slot.bookedBy && (
+                        <div style={{
+                          fontSize: '0.7rem',
+                          color: darkMode ? 'var(--gray-400)' : '#333',
+                          fontWeight: '500',
+                          marginTop: '0.25rem'
+                        }}>
+                          🚗 {slot.bookedBy}
+                        </div>
+                      )}
+
+                      {/* Booked Duration Info */}
+                      {slot.bookedFor && (
+                        <div style={{
+                          fontSize: '0.7rem',
+                          color: darkMode ? 'var(--gray-500)' : '#888',
+                          fontWeight: '400',
+                          marginTop: '0.25rem'
+                        }}>
+                          Booked for {slot.bookedFor}h
+                        </div>
+                      )}
+
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.65rem', color: '#fca5a5' }}>
+                        Manage cancellations from ticket page
+                      </div>
+                    </>
+                  )}
+
+                  {/* Click to Book Message for Vacant */}
+                  {isOpen && (
+                    <p style={{
+                      fontSize: '0.7rem',
+                      color: darkMode ? 'var(--gray-400)' : '#666',
+                      margin: '0.25rem 0 0 0',
+                      fontStyle: 'italic'
+                    }}>
+                      Click to book
+                    </p>
+                  )}
+                </div>
+                );
+              })}
+            </div>
+
+            {/* Stats Summary */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+              gap: '1rem',
+              paddingTop: '1.5rem',
+              borderTop: `1px solid ${cardBorder}`
+            }}>
+              <div style={{
+                textAlign: 'center',
+                padding: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '2rem',
+                  fontWeight: '800',
+                  color: '#22c55e'
+                }}>
+                  {slots.filter(s => (s.slotState || 'NOT_BOOKED') === 'NOT_BOOKED').length}
+                </div>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0.5rem 0 0 0'
+                }}>
+                  Open
+                </p>
+              </div>
+
+              <div style={{
+                textAlign: 'center',
+                padding: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '2rem',
+                  fontWeight: '800',
+                  color: '#eab308'
+                }}>
+                  {slots.filter(s => (s.slotState || '') === 'BOOKED').length}
+                </div>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0.5rem 0 0 0'
+                }}>
+                  Booked
+                </p>
+              </div>
+
+              <div style={{
+                textAlign: 'center',
+                padding: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '2rem',
+                  fontWeight: '800',
+                  color: '#3b82f6'
+                }}>
+                  {slots.filter(s => (s.slotState || '') === 'ARRIVED').length}
+                </div>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0.5rem 0 0 0'
+                }}>
+                  Arrived
+                </p>
+              </div>
+
+              <div style={{
+                textAlign: 'center',
+                padding: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '2rem',
+                  fontWeight: '800',
+                  color: '#00c6ff'
+                }}>
+                  {Math.round(((slots.filter(s => (s.slotState || 'NOT_BOOKED') === 'NOT_BOOKED').length) / Math.max(slots.length, 1)) * 100)}%
+                </div>
+                <p style={{
+                  color: darkMode ? 'var(--gray-400)' : '#666',
+                  fontSize: '0.9rem',
+                  margin: '0.5rem 0 0 0'
+                }}>
+                  Open %
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Current Bookings Table */}
         <div style={{
+          marginTop: '2rem',
           background: cardBg,
           border: `1px solid ${cardBorder}`,
           borderRadius: '1.5rem',
-          padding: '2.5rem',
-          backdropFilter: 'blur(10px)',
-          boxShadow: darkMode
-            ? '0 8px 32px rgba(0, 0, 0, 0.3)'
-            : '0 8px 32px rgba(0, 0, 0, 0.08)',
-          transition: 'all 0.3s ease'
+          padding: '1.5rem'
         }}>
-          {/* Section Title */}
-          <h2 style={{
-            fontSize: '1.5rem',
-            fontWeight: '700',
+          <h3 style={{
+            fontSize: '1.25rem',
             color: textColor,
-            marginBottom: '2rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
+            marginBottom: '1rem'
           }}>
-            🚗 Car Parking Slots (6 Available)
-          </h2>
-
-          {/* 6 Slots in Horizontal Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: '1.5rem',
-            marginBottom: '2rem'
-          }}>
-            {slots.map((slot) => (
-              <div
-                key={slot.id}
-                onClick={() => handleSlotClick(slot)}
-                style={{
-                  background: slot.booked
-                    ? 'rgba(239, 68, 68, 0.15)'
-                    : 'rgba(34, 197, 94, 0.15)',
-                  border: `2px solid ${slot.booked ? 'rgba(239, 68, 68, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`,
-                  borderRadius: '1.2rem',
-                  padding: '1.5rem 1rem',
-                  cursor: slot.booked ? 'default' : 'pointer',
-                  transition: 'all 0.3s ease',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.75rem',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  animation: 'fadeInUp 0.5s ease backwards',
-                  aspectRatio: '1 / 1.1',
-                  opacity: slot.booked ? 0.8 : 1
-                }}
-                onMouseEnter={(e) => {
-                  if (!slot.booked) {
-                    e.currentTarget.style.transform = 'translateY(-4px)';
-                    e.currentTarget.style.boxShadow = darkMode
-                      ? '0 12px 24px rgba(34, 197, 94, 0.3)'
-                      : '0 12px 24px rgba(34, 197, 94, 0.15)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                {/* Slot Number */}
-                <div style={{
-                  fontSize: '2rem',
-                  fontWeight: '900',
-                  color: slot.booked ? '#ef4444' : '#22c55e'
-                }}>
-                  {slot.number}
-                </div>
-
-                {/* Status Badge */}
-                <div style={{
-                  fontSize: '0.8rem',
-                  fontWeight: '600',
-                  padding: '0.4rem 0.8rem',
-                  borderRadius: '20px',
-                  background: slot.booked ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.25)',
-                  color: slot.booked ? '#ef4444' : '#22c55e',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  {slot.booked ? 'BOOKED' : 'VACANT'}
-                </div>
-
-                {/* Booking Duration */}
-                {slot.booked && slot.bookedUntil && (
-                  <>
-                    <div style={{
-                      fontSize: '0.75rem',
-                      color: darkMode ? 'var(--gray-400)' : '#333',
-                      fontWeight: '500',
-                      textAlign: 'center',
-                      marginTop: '0.25rem'
-                    }}>
-                      ⏱️ {getBookingDuration(slot.bookedUntil)}
-                    </div>
-
-                    {/* Vehicle Number */}
-                    {slot.bookedBy && (
-                      <div style={{
-                        fontSize: '0.7rem',
-                        color: darkMode ? 'var(--gray-400)' : '#333',
-                        fontWeight: '500',
-                        marginTop: '0.25rem'
-                      }}>
-                        🚗 {slot.bookedBy}
-                      </div>
-                    )}
-
-                    {/* Booked Duration Info */}
-                    {slot.bookedFor && (
-                      <div style={{
-                        fontSize: '0.7rem',
-                        color: darkMode ? 'var(--gray-500)' : '#888',
-                        fontWeight: '400',
-                        marginTop: '0.25rem'
-                      }}>
-                        Booked for {slot.bookedFor}h
-                      </div>
-                    )}
-
-                    {/* Cancel Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCancelBooking(slot.id);
-                      }}
-                      style={{
-                        marginTop: '0.5rem',
-                        padding: '0.35rem 0.75rem',
-                        background: 'rgba(239, 68, 68, 0.2)',
-                        border: '1px solid rgba(239, 68, 68, 0.4)',
-                        borderRadius: '6px',
-                        color: '#ef4444',
-                        fontSize: '0.65rem',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.background = 'rgba(239, 68, 68, 0.3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.background = 'rgba(239, 68, 68, 0.2)';
-                      }}
-                    >
-                      CANCEL
-                    </button>
-                  </>
-                )}
-
-                {/* Click to Book Message for Vacant */}
-                {!slot.booked && (
-                  <p style={{
-                    fontSize: '0.7rem',
-                    color: darkMode ? 'var(--gray-400)' : '#666',
-                    margin: '0.25rem 0 0 0',
-                    fontStyle: 'italic'
-                  }}>
-                    Click to book
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Stats Summary */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: '1rem',
-            paddingTop: '1.5rem',
-            borderTop: `1px solid ${cardBorder}`
-          }}>
-            <div style={{
-              textAlign: 'center',
-              padding: '1rem'
-            }}>
-              <div style={{
-                fontSize: '2rem',
-                fontWeight: '800',
-                color: '#22c55e'
-              }}>
-                {slots.filter(s => !s.booked).length}
-              </div>
-              <p style={{
-                color: darkMode ? 'var(--gray-400)' : '#666',
-                fontSize: '0.9rem',
-                margin: '0.5rem 0 0 0'
-              }}>
-                Available Slots
-              </p>
+            📋 Booked Slots
+          </h3>
+          {slots.filter(slot => slot.booked).length === 0 ? (
+            <p style={{ color: darkMode ? 'var(--gray-400)' : '#555', margin: 0 }}>
+              No active bookings right now.
+            </p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: `1px solid ${cardBorder}` }}>
+                    <th style={{ padding: '0.75rem 0' }}>Slot</th>
+                    <th style={{ padding: '0.75rem 0' }}>State</th>
+                    <th style={{ padding: '0.75rem 0' }}>Vehicle</th>
+                    <th style={{ padding: '0.75rem 0' }}>Duration</th>
+                    <th style={{ padding: '0.75rem 0' }}>Expires In</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slots.filter(slot => slot.booked).map((slot) => (
+                    <tr key={slot.id} style={{ borderBottom: `1px solid ${cardBorder}` }}>
+                      <td style={{ padding: '0.75rem 0' }}>{slot.number}</td>
+                      <td style={{ padding: '0.75rem 0' }}>{slot.slotState || 'BOOKED'}</td>
+                      <td style={{ padding: '0.75rem 0' }}>{slot.bookedBy || '-'}</td>
+                      <td style={{ padding: '0.75rem 0' }}>{slot.bookedFor}h</td>
+                      <td style={{ padding: '0.75rem 0' }}>{getBookingDuration(slot.bookedUntil)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-
-            <div style={{
-              textAlign: 'center',
-              padding: '1rem'
-            }}>
-              <div style={{
-                fontSize: '2rem',
-                fontWeight: '800',
-                color: '#ef4444'
-              }}>
-                {slots.filter(s => s.booked).length}
-              </div>
-              <p style={{
-                color: darkMode ? 'var(--gray-400)' : '#666',
-                fontSize: '0.9rem',
-                margin: '0.5rem 0 0 0'
-              }}>
-                Booked Slots
-              </p>
-            </div>
-
-            <div style={{
-              textAlign: 'center',
-              padding: '1rem'
-            }}>
-              <div style={{
-                fontSize: '2rem',
-                fontWeight: '800',
-                color: '#00c6ff'
-              }}>
-                {Math.round((slots.filter(s => !s.booked).length / 6) * 100)}%
-              </div>
-              <p style={{
-                color: darkMode ? 'var(--gray-400)' : '#666',
-                fontSize: '0.9rem',
-                margin: '0.5rem 0 0 0'
-              }}>
-                Availability
-              </p>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Footer Note */}
@@ -489,7 +931,10 @@ const Dashboard = () => {
             margin: '0',
             fontStyle: 'italic'
           }}>
-            ℹ️ Click on VACANT slots to book • Set duration and vehicle number • Shows remaining booking time
+            ℹ️ {!showSlotsView 
+              ? 'Select a parking duration above to view available slots • Choose how long you want to park'
+              : 'Click on open (green) slots to book • Amber = booked, blue = arrived • Set duration and vehicle number'
+            }
           </p>
         </div>
 
@@ -533,7 +978,35 @@ const Dashboard = () => {
 
               {/* Vehicle Number Input */}
               <div style={{
-                marginBottom: '1.5rem'
+                marginBottom: '1rem'
+              }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: textColor,
+                  fontWeight: '600',
+                  fontSize: '0.95rem'
+                }}>
+                  🚘 Vehicle Type
+                </label>
+                <input
+                  value="Car"
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '0.75rem',
+                    border: `1px solid ${cardBorder}`,
+                    background: darkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                    color: textColor,
+                    fontSize: '1rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{
+                marginBottom: '1rem'
               }}>
                 <label style={{
                   display: 'block',
@@ -567,6 +1040,66 @@ const Dashboard = () => {
                   onBlur={(e) => {
                     e.target.style.border = `1px solid ${cardBorder}`;
                     e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+                  }}
+                />
+              </div>
+
+              {/* Date & Time Inputs */}
+              <div style={{
+                marginBottom: '1rem'
+              }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: textColor,
+                  fontWeight: '600',
+                  fontSize: '0.95rem'
+                }}>
+                  📅 Date</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  min={new Date().toISOString().slice(0, 10)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '0.75rem',
+                    border: `1px solid ${cardBorder}`,
+                    background: darkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                    color: textColor,
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                    transition: 'all 0.3s ease'
+                  }}
+                />
+              </div>
+
+              <div style={{
+                marginBottom: '1.5rem'
+              }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: textColor,
+                  fontWeight: '600',
+                  fontSize: '0.95rem'
+                }}>
+                  ⏰ Time</label>
+                <input
+                  type="time"
+                  value={selectedTime}
+                  onChange={(e) => setSelectedTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '0.75rem',
+                    border: `1px solid ${cardBorder}`,
+                    background: darkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                    color: textColor,
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                    transition: 'all 0.3s ease'
                   }}
                 />
               </div>
@@ -629,7 +1162,7 @@ const Dashboard = () => {
                   fontSize: '0.85rem',
                   margin: '0.5rem 0 0 0'
                 }}>
-                  Booking until: <strong>{new Date(Date.now() + bookingDuration * 60 * 60 * 1000).toLocaleTimeString()}</strong>
+                  Booking until: <strong>{bookingEndTime}</strong>
                 </p>
               </div>
 
@@ -689,7 +1222,7 @@ const Dashboard = () => {
                     e.target.style.boxShadow = 'none';
                   }}
                 >
-                  ✅ Confirm Booking
+                  ✅ Proceed to Payment
                 </button>
                 <button
                   onClick={() => setShowBookingModal(false)}
