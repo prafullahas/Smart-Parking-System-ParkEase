@@ -1,5 +1,8 @@
 # Dependencies
 node_modules/
+.env
+*.msi
+*.exe
 
 # Environment variables
 .env
