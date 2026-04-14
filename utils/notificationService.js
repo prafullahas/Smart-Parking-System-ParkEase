@@ -40,21 +40,51 @@ const sendWithRetry = async (fn, retries = DEFAULT_RETRIES) => {
   return { ok: false, attempts, result: null, error: lastError?.message || 'Unknown notification failure' };
 };
 
+// const sendEmail = async ({ to, subject, text, html }) => {
+//   if (!to) throw new Error('Missing email recipient');
+//   if (!transporter) {
+//     //console.log(`[NOTIFICATION:EMAIL:MOCK] ${to} | ${subject} | ${text}`);
+//     await sendEmail(email, subject, message);
+    
+//     return { provider: 'mock-email' };
+//   }
+//   const info = await transporter.sendMail({
+//     from: process.env.EMAIL_FROM || emailUser,
+//     to,
+//     subject,
+//     text,
+//     html: html || `<p>${text}</p>`
+//   });
+//   console.log(`Email sent to: ${to} | subject: ${subject} | messageId: ${info.messageId}`);
+//   return { provider: 'smtp', messageId: info.messageId };
+// };
 const sendEmail = async ({ to, subject, text, html }) => {
   if (!to) throw new Error('Missing email recipient');
+
+  // 🔴 If transporter not configured
   if (!transporter) {
-    console.log(`[NOTIFICATION:EMAIL:MOCK] ${to} | ${subject} | ${text}`);
+    console.log(`[MOCK EMAIL] ${to} | ${subject} | ${text}`);
     return { provider: 'mock-email' };
   }
-  const info = await transporter.sendMail({
-    from: process.env.EMAIL_FROM || emailUser,
-    to,
-    subject,
-    text,
-    html: html || `<p>${text}</p>`
-  });
-  console.log(`Email sent to: ${to} | subject: ${subject} | messageId: ${info.messageId}`);
-  return { provider: 'smtp', messageId: info.messageId };
+
+  try {
+    console.log("REAL EMAIL FUNCTION CALLED"); // ✅ Debug
+
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      to,
+      subject,
+      text,
+      html: html || `<p>${text}</p>`
+    });
+
+    console.log(`Email sent to: ${to} | subject: ${subject}`);
+    return { provider: 'smtp', messageId: info.messageId };
+
+  } catch (error) {
+    console.error("Email error:", error);
+    throw error; // important
+  }
 };
 
 const sendNotification = async ({
