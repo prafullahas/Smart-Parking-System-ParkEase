@@ -1,24 +1,24 @@
 const nodemailer = require('nodemailer');
-const twilio = require('twilio');
 
 const DEFAULT_RETRIES = 2;
 
 let transporter = null;
-if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+const emailHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+const emailPort = Number(process.env.SMTP_PORT || 587);
+const emailUser = process.env.EMAIL_USER || process.env.SMTP_USER;
+const emailPass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
+const emailSecure = process.env.SMTP_SECURE === 'true';
+
+if (emailUser && emailPass) {
   transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true',
+    host: emailHost,
+    port: emailPort,
+    secure: emailSecure,
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
+      user: emailUser,
+      pass: emailPass
     }
   });
-}
-
-let twilioClient = null;
-if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-  twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,41 +47,14 @@ const sendEmail = async ({ to, subject, text, html }) => {
     return { provider: 'mock-email' };
   }
   const info = await transporter.sendMail({
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+    from: process.env.EMAIL_FROM || emailUser,
     to,
     subject,
     text,
     html: html || `<p>${text}</p>`
   });
+  console.log(`Email sent to: ${to} | subject: ${subject} | messageId: ${info.messageId}`);
   return { provider: 'smtp', messageId: info.messageId };
-};
-
-const sendSms = async ({ to, body }) => {
-  if (!to) throw new Error('Missing SMS recipient');
-  if (!twilioClient || !process.env.TWILIO_SMS_FROM) {
-    console.log(`[NOTIFICATION:SMS:MOCK] ${to} | ${body}`);
-    return { provider: 'mock-sms' };
-  }
-  const msg = await twilioClient.messages.create({
-    body,
-    from: process.env.TWILIO_SMS_FROM,
-    to
-  });
-  return { provider: 'twilio-sms', sid: msg.sid };
-};
-
-const sendWhatsApp = async ({ to, body }) => {
-  if (!to) throw new Error('Missing WhatsApp recipient');
-  if (!twilioClient || !process.env.TWILIO_WHATSAPP_FROM) {
-    console.log(`[NOTIFICATION:WHATSAPP:MOCK] ${to} | ${body}`);
-    return { provider: 'mock-whatsapp' };
-  }
-  const msg = await twilioClient.messages.create({
-    body,
-    from: process.env.TWILIO_WHATSAPP_FROM,
-    to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`
-  });
-  return { provider: 'twilio-whatsapp', sid: msg.sid };
 };
 
 const sendNotification = async ({
@@ -98,8 +71,6 @@ const sendNotification = async ({
   if (!user) return { success: false, reason: 'No user provided' };
 
   const textMessage = message || 'You have a new update from ParkEase.';
-  const smsBody = smsMessage || textMessage;
-  const whatsappBody = whatsappMessage || smsBody;
   const results = [];
 
   if (user.email) {
@@ -115,32 +86,6 @@ const sendNotification = async ({
       provider: emailResult.result?.provider || 'unknown',
       attempts: emailResult.attempts,
       error: emailResult.error || null,
-      sentAt: new Date()
-    });
-  }
-
-  if (user.phone) {
-    const smsResult = await sendWithRetry(() => sendSms({ to: user.phone, body: smsBody }), retries);
-    results.push({
-      type,
-      channel: 'phone',
-      message: smsBody,
-      status: smsResult.ok ? 'sent' : 'failed',
-      provider: smsResult.result?.provider || 'unknown',
-      attempts: smsResult.attempts,
-      error: smsResult.error || null,
-      sentAt: new Date()
-    });
-
-    const waResult = await sendWithRetry(() => sendWhatsApp({ to: user.phone, body: whatsappBody }), retries);
-    results.push({
-      type,
-      channel: 'whatsapp',
-      message: whatsappBody,
-      status: waResult.ok ? 'sent' : 'failed',
-      provider: waResult.result?.provider || 'unknown',
-      attempts: waResult.attempts,
-      error: waResult.error || null,
       sentAt: new Date()
     });
   }

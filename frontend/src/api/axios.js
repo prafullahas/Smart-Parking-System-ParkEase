@@ -52,12 +52,20 @@ api.interceptors.response.use(
       });
     }
 
-    // Handle 401 unauthorized
+    // Handle 401 unauthorized (but not failed login/signup — those should show inline errors)
     if (error.response?.status === 401) {
-      // Unauthorized, redirect to login
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const reqUrl = error.config?.url || '';
+      const isPublicAuth =
+        reqUrl.includes('/auth/login') ||
+        reqUrl.includes('/auth/signup') ||
+        reqUrl.includes('/auth/send-email-otp') ||
+        reqUrl.includes('/auth/verify-email-otp') ||
+        reqUrl.includes('/auth/resend-email-otp');
+      if (!isPublicAuth) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
     }
 
     return Promise.reject(error);

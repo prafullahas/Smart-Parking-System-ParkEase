@@ -12,7 +12,7 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [darkMode, setDarkMode] = useState(true);
+  const darkMode = true;
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -61,13 +61,20 @@ const Signup = () => {
       });
       
       if (response.data.success) {
-        setSuccess('Account created! Redirecting to dashboard...');
-        localStorage.setItem('token', response.data.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.data));
-        
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 500);
+        const normalizedEmail = email.trim().toLowerCase();
+        try {
+          await api.post('/auth/send-email-otp', { email: normalizedEmail });
+          setSuccess('Account created! OTP sent to your email. Redirecting...');
+          setTimeout(() => {
+            navigate(`/login?email=${encodeURIComponent(normalizedEmail)}&from=signup`);
+          }, 600);
+        } catch (otpErr) {
+          const otpMsg = otpErr.response?.data?.message || 'Account created, but OTP send failed. Please try login with OTP.';
+          setSuccess(otpMsg);
+          setTimeout(() => {
+            navigate('/login');
+          }, 900);
+        }
       }
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Signup failed. Please try again.';
@@ -97,39 +104,6 @@ const Signup = () => {
         justifyContent: 'center',
         padding: '2rem 1rem'
       }}>
-        {/* Theme Toggle Button */}
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          style={{
-            position: 'fixed',
-            top: '80px',
-            right: '20px',
-            padding: '0.7rem 1.4rem',
-            background: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-            border: `1px solid ${darkMode ? 'rgba(0, 198, 255, 0.3)' : 'rgba(0, 198, 255, 0.3)'}`,
-            borderRadius: '50px',
-            color: darkMode ? 'var(--gray-100)' : '#1a2744',
-            fontSize: '0.95rem',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
-            e.target.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            e.target.style.transform = 'scale(1)';
-          }}
-        >
-          {darkMode ? '☀️ Light' : '🌙 Dark'}
-        </button>
-
         {/* Signup Container */}
         <div style={{
           background: darkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',

@@ -10,6 +10,8 @@ import Receipt from './pages/Receipt';
 import QRScanner from './pages/QRScanner';
 import MyBookings from './pages/MyBookings';
 import BookingVerification from './pages/BookingVerification';
+import PhoneOtpAuth from './pages/PhoneOtpAuth';
+import EmailOtpAuth from './pages/EmailOtpAuth';
 import './App.css';
 
 function App() {
@@ -18,8 +20,11 @@ function App() {
       <div className="App">
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<EmailOtpAuth />} />
+          <Route path="/password-login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/phone-auth" element={<PhoneOtpAuth />} />
+          <Route path="/email-auth" element={<EmailOtpAuth />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/book-slot" element={<BookSlot />} />

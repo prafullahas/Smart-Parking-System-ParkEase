@@ -65,7 +65,7 @@ const AdminDashboard = () => {
     if (!user) return undefined;
     const interval = setInterval(() => {
       refreshDashboard();
-    }, 5000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [user, refreshDashboard]);
 

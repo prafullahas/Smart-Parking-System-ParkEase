@@ -10,7 +10,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [darkMode, setDarkMode] = useState(true);
+  const darkMode = true;
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -82,39 +82,6 @@ const Login = () => {
         justifyContent: 'center',
         padding: '2rem 1rem'
       }}>
-        {/* Theme Toggle Button */}
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          style={{
-            position: 'fixed',
-            top: '80px',
-            right: '20px',
-            padding: '0.7rem 1.4rem',
-            background: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-            border: `1px solid ${darkMode ? 'rgba(0, 198, 255, 0.3)' : 'rgba(0, 198, 255, 0.3)'}`,
-            borderRadius: '50px',
-            color: darkMode ? 'var(--gray-100)' : '#1a2744',
-            fontSize: '0.95rem',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
-            e.target.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            e.target.style.transform = 'scale(1)';
-          }}
-        >
-          {darkMode ? '☀️ Light' : '🌙 Dark'}
-        </button>
-
         {/* Login Container */}
         <div style={{
           background: darkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
@@ -317,6 +284,26 @@ const Login = () => {
             }}>
               Don't have an account?
             </p>
+            <Link
+              to="/phone-auth"
+              style={{
+                display: 'inline-block',
+                padding: '0.75rem 1.5rem',
+                background: darkMode ? 'rgba(22, 163, 74, 0.2)' : 'rgba(22, 163, 74, 0.15)',
+                border: '1px solid rgba(22, 163, 74, 0.45)',
+                borderRadius: '0.75rem',
+                color: darkMode ? '#86efac' : '#166534',
+                textDecoration: 'none',
+                fontWeight: '600',
+                fontSize: '0.95rem',
+                transition: 'all 0.3s ease',
+                cursor: 'pointer',
+                marginBottom: '0.9rem'
+              }}
+            >
+              Login with OTP
+            </Link>
+            <br />
             <Link
               to="/signup"
               style={{

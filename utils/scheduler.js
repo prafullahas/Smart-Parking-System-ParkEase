@@ -99,7 +99,6 @@ const completeExpiredBookings = async () => {
 // Function to check for no-show bookings (car didn't arrive within grace period)
 const checkNoShowBookings = async () => {
   try {
-    const mongoose = require('mongoose');
     const now = new Date();
     const late5 = new Date(now.getTime() - 5 * 60 * 1000);
     const late10 = new Date(now.getTime() - 10 * 60 * 1000);
@@ -124,13 +123,17 @@ const checkNoShowBookings = async () => {
           user: booking.userId,
           type: 'LATE_5_MIN',
           message: `You are 5 minutes late for slot ${booking.slotId?.slotNumber}. Please arrive soon.`,
-          smsMessage: '🚗 You are late for your parking booking. Please arrive soon.',
-          whatsappMessage: `🚗 You are 5 minutes late for booking ${booking._id}. Please arrive soon.`,
           emailSubject: 'Late Arrival Reminder (5 min) - ParkEase',
           emailHtml: `
-            <div style="font-family:Arial,sans-serif">
-              <h3>Late Arrival Reminder</h3>
-              <p>You are 5 minutes late for slot ${booking.slotId?.slotNumber}. Please arrive soon to avoid cancellation.</p>
+            <div style="font-family:Arial,sans-serif;max-width:640px">
+              <h2 style="color:#0f172a">You are late</h2>
+              <p>Hi ${booking.userId?.name || 'User'}, you are 5 minutes late for your booking.</p>
+              <ul>
+                <li><strong>Booking ID:</strong> ${booking._id}</li>
+                <li><strong>Slot:</strong> ${booking.slotId?.slotNumber || 'N/A'}</li>
+                <li><strong>Status:</strong> <span style="color:#16a34a">VALID</span></li>
+              </ul>
+              <p>Please arrive soon to avoid auto-cancellation.</p>
             </div>
           `,
           booking
@@ -144,13 +147,16 @@ const checkNoShowBookings = async () => {
           user: booking.userId,
           type: 'LATE_10_MIN_WARNING',
           message: `You are 10 minutes late. If you do not arrive in the next 5 minutes, your booking will be cancelled.`,
-          smsMessage: '⚠️ Arrive within 5 minutes or your booking will be cancelled.',
-          whatsappMessage: `⚠️ Final warning for booking ${booking._id}. Arrive in 5 minutes to avoid cancellation.`,
           emailSubject: 'Final Warning (10 min late) - ParkEase',
           emailHtml: `
-            <div style="font-family:Arial,sans-serif">
-              <h3>Urgent: Arrival Needed</h3>
+            <div style="font-family:Arial,sans-serif;max-width:640px">
+              <h2 style="color:#b45309">Final warning</h2>
               <p>You are now 10 minutes late. Arrive within 5 minutes or your booking will be cancelled.</p>
+              <ul>
+                <li><strong>Booking ID:</strong> ${booking._id}</li>
+                <li><strong>Slot:</strong> ${booking.slotId?.slotNumber || 'N/A'}</li>
+                <li><strong>Status:</strong> <span style="color:#16a34a">VALID</span></li>
+              </ul>
             </div>
           `,
           booking
@@ -162,54 +168,45 @@ const checkNoShowBookings = async () => {
       if (booking.startTime > gracePeriodStart) {
         continue;
       }
+      console.log(`No-show detected for booking ${booking._id} - slot ${booking.slotId.slotNumber}`);
 
-      const sensorData = await mongoose.connection
-        .collection('bookings')
-        .findOne({
-          slot_number: booking.slotId.slotNumber,
-          is_parked: true,
-          vehicle_number: booking.vehicleNumber,
-          timestamp: { $gte: booking.startTime }
-        });
+      booking.status = 'cancelled';
+      booking.expiredAt = now;
+      booking.paymentStatus = booking.paymentStatus === 'COMPLETED' ? 'REFUNDED' : 'FAILED';
+      booking.reminderFlags.noShowSent = true;
+      await booking.save();
 
-      if (!sensorData) {
-        console.log(`No-show detected for booking ${booking._id} - slot ${booking.slotId.slotNumber}`);
-
-        booking.status = 'expired';
-        booking.expiredAt = now;
-        booking.paymentStatus = booking.paymentStatus === 'COMPLETED' ? 'REFUNDED' : 'FAILED';
-        booking.reminderFlags.noShowSent = true;
-        await booking.save();
-
-        if (booking.slotId) {
-          booking.slotId.isAvailable = false;
-          booking.slotId.slotState = 'EXPIRED';
-          await booking.slotId.save();
-        }
-
-        const location = await Location.findById(booking.locationId);
-        if (location) {
-          // keep availableSlots unchanged while EXPIRED state is still visible to admin
-          await location.save();
-        }
-
-        console.log(`Marked booking ${booking._id} as expired and set slot ${booking.slotId.slotNumber} to EXPIRED`);
-        await sendNotification({
-          user: booking.userId,
-          type: 'NO_ARRIVAL_15_MIN',
-          message: `Your booking for slot ${booking.slotId?.slotNumber} expired due to no arrival within 15 minutes.`,
-          smsMessage: '❌ Booking cancelled due to no arrival.',
-          whatsappMessage: `❌ Booking ${booking._id} cancelled due to no arrival in 15 minutes.`,
-          emailSubject: 'Booking Cancelled due to No Arrival - ParkEase',
-          emailHtml: `
-            <div style="font-family:Arial,sans-serif">
-              <h3>Booking Cancelled</h3>
-              <p>Your booking ${booking._id} was cancelled as no arrival was detected within 15 minutes of start time.</p>
-            </div>
-          `,
-          booking
-        });
+      if (booking.slotId) {
+        booking.slotId.isAvailable = true;
+        booking.slotId.slotState = 'NOT_BOOKED';
+        await booking.slotId.save();
       }
+
+      const location = await Location.findById(booking.locationId);
+      if (location) {
+        location.availableSlots += 1;
+        await location.save();
+      }
+
+      console.log(`Auto-cancelled booking ${booking._id} after 15 minutes and released slot ${booking.slotId.slotNumber}`);
+      await sendNotification({
+        user: booking.userId,
+        type: 'NO_ARRIVAL_15_MIN',
+        message: `Your booking for slot ${booking.slotId?.slotNumber} was auto-cancelled due to no arrival within 15 minutes.`,
+        emailSubject: 'Booking Auto-Cancelled - ParkEase',
+        emailHtml: `
+          <div style="font-family:Arial,sans-serif;max-width:640px">
+            <h2 style="color:#b91c1c">Booking Cancelled</h2>
+            <p>Your booking was auto-cancelled due to no arrival within 15 minutes.</p>
+            <ul>
+              <li><strong>Booking ID:</strong> ${booking._id}</li>
+              <li><strong>Slot:</strong> ${booking.slotId?.slotNumber || 'N/A'}</li>
+              <li><strong>Status:</strong> <span style="color:#b91c1c">CANCELLED</span></li>
+            </ul>
+          </div>
+        `,
+        booking
+      });
     }
   } catch (error) {
     console.error('Error checking no-show bookings:', error);
@@ -223,13 +220,13 @@ const startScheduler = () => {
     await completeExpiredBookings();
   });
 
-  // Run every 2 minutes to check for no-show bookings
-  cron.schedule('*/2 * * * *', async () => {
+  // Run every minute to check no-shows and late alerts
+  cron.schedule('* * * * *', async () => {
     await checkNoShowBookings();
   });
 
   console.log('Booking scheduler started - checking for expired bookings every minute');
-  console.log('Checking for no-show bookings every 2 minutes');
+  console.log('Checking for no-show bookings every minute');
 };
 
 // Graceful shutdown

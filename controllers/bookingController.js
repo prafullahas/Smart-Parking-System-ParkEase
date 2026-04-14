@@ -5,6 +5,7 @@ const User = require('../models/User');
 const QRCode = require('qrcode');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const mongoose = require('mongoose');
+const os = require('os');
 const { sendNotification } = require('../utils/notificationService');
 
 const formatDateTime = (value) => new Date(value).toLocaleString('en-IN');
@@ -29,6 +30,18 @@ const buildBookingSummaryHtml = ({ user, booking, slotNumber, locationName, reas
       ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
     </div>
   `;
+};
+
+const resolveLocalIPv4 = () => {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return null;
 };
 
 // Process payment with Stripe or mock payment for development
@@ -95,7 +108,13 @@ const processPayment = async (amount, paymentMethod, paymentMethodId) => {
 // Generate QR Code for booking
 const generateQRCode = async (bookingData) => {
   try {
-    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const localIp = resolveLocalIPv4();
+    const defaultFrontend = localIp ? `http://${localIp}:5173` : 'http://localhost:5173';
+    const frontendBase =
+      process.env.QR_PUBLIC_BASE_URL ||
+      process.env.FRONTEND_PUBLIC_URL ||
+      process.env.FRONTEND_URL ||
+      defaultFrontend;
     const qrData = `${frontendBase}/booking/${bookingData._id}`;
 
     // Generate QR code as data URI

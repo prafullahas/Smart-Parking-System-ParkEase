@@ -1,12 +1,69 @@
 const User = require('../models/User');
+const PhoneAuthUser = require('../models/PhoneAuthUser');
+const EmailAuthUser = require('../models/EmailAuthUser');
 const jwt = require('jsonwebtoken');
 const { sendNotification } = require('../utils/notificationService');
+const nodemailer = require('nodemailer');
 
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '30d'
   });
+};
+
+const generatePhoneToken = (phone, userId) => {
+  return jwt.sign(
+    { phone, id: userId || null },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+};
+
+const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+const normalizePhone = (phone) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  return digits;
+};
+
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const mailUser = process.env.EMAIL_USER || process.env.SMTP_USER;
+const mailPass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
+const mailTransporter = mailUser && mailPass
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: mailUser,
+        pass: mailPass
+      }
+    })
+  : null;
+
+const sendEmail = async (to, subject, message, html = null) => {
+  if (!to) throw new Error('Recipient email is required');
+  if (!mailTransporter) {
+    console.log(`[EMAIL:MOCK] ${to} | ${subject} | ${message}`);
+    return { delivered: false, mode: 'mock' };
+  }
+  try {
+    const info = await mailTransporter.sendMail({
+      from: process.env.EMAIL_FROM || mailUser,
+      to,
+      subject,
+      text: message,
+      html: html || `<div style="font-family:Arial,sans-serif"><p>${message}</p></div>`
+    });
+    console.log(`Email sent to: ${to} | subject: ${subject} | messageId: ${info.messageId}`);
+    return { delivered: true, mode: 'smtp', messageId: info.messageId };
+  } catch (err) {
+    console.error('Email error:', err.message);
+    return { delivered: false, mode: 'smtp-error', error: err.message };
+  }
 };
 
 // @desc    Register a new user
@@ -133,6 +190,335 @@ const login = async (req, res) => {
       message: 'Error logging in',
       error: error.message
     });
+  }
+};
+
+// @desc    Send OTP for phone authentication
+// @route   POST /api/auth/send-otp
+// @access  Public
+const sendOtp = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body.phone);
+
+    if (phone.length !== 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid 10-digit phone number'
+      });
+    }
+
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    const authUser = await PhoneAuthUser.findOneAndUpdate(
+      { phone },
+      {
+        $set: {
+          otp,
+          otpExpiry,
+          otpAttempts: 0
+        },
+        $setOnInsert: {
+          isVerified: false
+        }
+      },
+      {
+        new: true,
+        upsert: true
+      }
+    );
+
+    console.log('OTP for', phone, 'is:', otp);
+
+    return res.json({
+      success: true,
+      message: 'OTP sent successfully (check console)',
+      data: {
+        phone: authUser.phone
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error sending OTP',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Verify OTP for phone authentication
+// @route   POST /api/auth/verify-otp
+// @access  Public
+const verifyOtp = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body.phone);
+    const otp = String(req.body.otp || '').trim();
+
+    if (phone.length !== 10 || otp.length !== 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide valid phone and 6-digit OTP'
+      });
+    }
+
+    const authUser = await PhoneAuthUser.findOne({ phone });
+    if (!authUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Phone number not found. Please request OTP first'
+      });
+    }
+
+    if (authUser.otpAttempts >= 3) {
+      return res.status(429).json({
+        success: false,
+        message: 'Max attempts reached'
+      });
+    }
+
+    if (!authUser.otpExpiry || new Date() > authUser.otpExpiry) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP expired'
+      });
+    }
+
+    if (authUser.otp !== otp) {
+      authUser.otpAttempts += 1;
+      await authUser.save();
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP'
+      });
+    }
+
+    authUser.isVerified = true;
+    authUser.otp = null;
+    authUser.otpExpiry = null;
+    authUser.otpAttempts = 0;
+    await authUser.save();
+
+    const linkedUser = await User.findOne({ phone });
+    const token = generatePhoneToken(phone, linkedUser?._id);
+
+    return res.json({
+      success: true,
+      message: 'Verification success',
+      token,
+      data: {
+        phone,
+        isVerified: true,
+        user: linkedUser
+          ? {
+              _id: linkedUser._id,
+              name: linkedUser.name,
+              email: linkedUser.email,
+              phone: linkedUser.phone,
+              role: linkedUser.role,
+              vehicle: linkedUser.vehicle
+            }
+          : null
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error verifying OTP',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Resend OTP for phone authentication
+// @route   POST /api/auth/resend-otp
+// @access  Public
+const resendOtp = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body.phone);
+    if (phone.length !== 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid 10-digit phone number'
+      });
+    }
+
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    await PhoneAuthUser.findOneAndUpdate(
+      { phone },
+      {
+        $set: {
+          otp,
+          otpExpiry,
+          otpAttempts: 0
+        },
+        $setOnInsert: {
+          isVerified: false
+        }
+      },
+      { upsert: true }
+    );
+
+    console.log('OTP for', phone, 'is:', otp);
+
+    return res.json({
+      success: true,
+      message: 'OTP resent successfully (check console)'
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error resending OTP',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Send OTP for email authentication
+// @route   POST /api/auth/send-email-otp
+// @access  Public
+const sendEmailOtp = async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    if (!/^[\w-.+]+@[\w-]+\.[\w-.]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid email' });
+    }
+
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    await EmailAuthUser.findOneAndUpdate(
+      { email },
+      {
+        $set: { otp, otpExpiry, otpAttempts: 0 },
+        $setOnInsert: { isVerified: false }
+      },
+      { new: true, upsert: true }
+    );
+
+    const emailResult = await sendEmail(email, 'Your OTP Code', `Your OTP is ${otp}`, `
+      <div style="font-family:Arial,sans-serif;max-width:560px">
+        <h2 style="margin:0 0 12px 0">ParkEase Email OTP</h2>
+        <p>Your OTP is <strong style="font-size:20px">${otp}</strong></p>
+        <p>This OTP expires in 5 minutes.</p>
+      </div>
+    `);
+    console.log('Email OTP sent:', otp);
+
+    return res.json({
+      success: true,
+      message: emailResult.delivered ? 'OTP sent to email' : 'OTP generated (email delivery failed, check server console)'
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Error sending email OTP', error: error.message });
+  }
+};
+
+// @desc    Verify OTP for email authentication
+// @route   POST /api/auth/verify-email-otp
+// @access  Public
+const verifyEmailOtp = async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const otp = String(req.body.otp || '').trim();
+    const authUser = await EmailAuthUser.findOne({ email });
+
+    if (!authUser) {
+      return res.status(404).json({ success: false, message: 'Email not found. Please request OTP first' });
+    }
+    if (authUser.otpAttempts >= 3) {
+      return res.status(429).json({ success: false, message: 'Max attempts reached' });
+    }
+    if (!authUser.otpExpiry || new Date() > authUser.otpExpiry) {
+      return res.status(400).json({ success: false, message: 'Expired OTP' });
+    }
+    if (authUser.otp !== otp) {
+      authUser.otpAttempts += 1;
+      await authUser.save();
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    authUser.isVerified = true;
+    authUser.otp = null;
+    authUser.otpExpiry = null;
+    authUser.otpAttempts = 0;
+    await authUser.save();
+
+    const linkedUser = await User.findOne({ email });
+    const token = jwt.sign(
+      { email, id: linkedUser?._id || null },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    return res.json({
+      success: true,
+      message: 'Verified',
+      token,
+      data: {
+        email,
+        isVerified: true,
+        user: linkedUser
+          ? {
+              _id: linkedUser._id,
+              name: linkedUser.name,
+              email: linkedUser.email,
+              phone: linkedUser.phone,
+              role: linkedUser.role,
+              vehicle: linkedUser.vehicle
+            }
+          : null
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Error verifying email OTP', error: error.message });
+  }
+};
+
+// @desc    Resend OTP for email authentication
+// @route   POST /api/auth/resend-email-otp
+// @access  Public
+const resendEmailOtp = async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    if (!/^[\w-.+]+@[\w-]+\.[\w-.]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid email' });
+    }
+
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    await EmailAuthUser.findOneAndUpdate(
+      { email },
+      {
+        $set: { otp, otpExpiry, otpAttempts: 0 },
+        $setOnInsert: { isVerified: false }
+      },
+      { upsert: true }
+    );
+
+    const emailResult = await sendEmail(email, 'Your OTP Code', `Your OTP is ${otp}`, `
+      <div style="font-family:Arial,sans-serif;max-width:560px">
+        <h2 style="margin:0 0 12px 0">ParkEase Email OTP</h2>
+        <p>Your new OTP is <strong style="font-size:20px">${otp}</strong></p>
+        <p>This OTP expires in 5 minutes.</p>
+      </div>
+    `);
+    console.log('Email OTP sent:', otp);
+
+    return res.json({
+      success: true,
+      message: emailResult.delivered ? 'OTP sent to email' : 'OTP generated (email delivery failed, check server console)'
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Error resending email OTP', error: error.message });
   }
 };
 
@@ -278,6 +664,12 @@ const logout = async (req, res) => {
 module.exports = {
   signup,
   login,
+  sendEmailOtp,
+  verifyEmailOtp,
+  resendEmailOtp,
+  sendOtp,
+  verifyOtp,
+  resendOtp,
   getProfile,
   updateProfile,
   logout,

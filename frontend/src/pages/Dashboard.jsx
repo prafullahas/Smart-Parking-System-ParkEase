@@ -7,7 +7,7 @@ import '../App.css';
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
+  const darkMode = true;
   const [slots, setSlots] = useState([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -324,34 +324,6 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* Light/Dark Mode Toggle */}
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-              border: `1px solid ${cardBorder}`,
-              borderRadius: '50px',
-              color: textColor,
-              fontSize: '1rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
-              e.target.style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-              e.target.style.transform = 'scale(1)';
-            }}
-          >
-            {darkMode ? '☀️ Light' : '🌙 Dark'}
-          </button>
         </div>
 
         {/* Main Content - Overview or Slots View */}
