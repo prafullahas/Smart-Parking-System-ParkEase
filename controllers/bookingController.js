@@ -45,58 +45,79 @@ const resolveLocalIPv4 = () => {
 };
 
 // Process payment with Stripe or mock payment for development
+// const processPayment = async (amount, paymentMethod, paymentMethodId) => {
+//   try {
+//     // Check if Stripe is properly configured
+//     if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== 'sk_test_your_stripe_secret_key_here') {
+//       // Use real Stripe payment
+//       //const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+//       // Convert amount to cents (Stripe expects amounts in smallest currency unit)
+//       const amountInCents = Math.round(amount * 100);
+
+//       let paymentIntent;
+
+//       if (paymentMethodId) {
+//         // Confirm existing payment intent
+//         paymentIntent = await stripe.paymentIntents.confirm(paymentMethodId, {
+//           return_url: `${process.env.FRONTEND_URL}/payment/success`,
+//         });
+//       } else {
+//         // Create new payment intent
+//         paymentIntent = await stripe.paymentIntents.create({
+//           amount: amountInCents,
+//           currency: 'inr',
+//           payment_method_types: ['card', 'upi', 'netbanking'],
+//           metadata: {
+//             paymentMethod: paymentMethod
+//           }
+//         });
+//       }
+
+//       return {
+//         success: paymentIntent.status === 'succeeded',
+//         transactionId: paymentIntent.id,
+//         clientSecret: paymentIntent.client_secret,
+//         message: paymentIntent.status === 'succeeded' ? 'Payment successful' : 'Payment processing'
+//       };
+//     } else {
+//       // Use mock payment for development
+//       console.log('Using mock payment (Stripe not configured)');
+
+//       // Simulate payment processing delay
+//       await new Promise(resolve => setTimeout(resolve, 1000));
+
+//       // Always succeed for demo purposes
+//       return {
+//         success: true,
+//         transactionId: `RZP_MOCK_TXN_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+//         clientSecret: 'mock_client_secret_' + Date.now(),
+//         message: 'Mock Razorpay-style payment successful'
+//       };
+//     }
+//   } catch (error) {
+//     console.error('Payment error:', error);
+//     return {
+//       success: false,
+//       transactionId: null,
+//       message: error.message || 'Payment failed'
+//     };
+//   }
+// };
 const processPayment = async (amount, paymentMethod, paymentMethodId) => {
   try {
-    // Check if Stripe is properly configured
-    if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== 'sk_test_your_stripe_secret_key_here') {
-      // Use real Stripe payment
-      //const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    console.log('Using mock payment (Stripe disabled)');
 
-      // Convert amount to cents (Stripe expects amounts in smallest currency unit)
-      const amountInCents = Math.round(amount * 100);
+    // simulate delay
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-      let paymentIntent;
-
-      if (paymentMethodId) {
-        // Confirm existing payment intent
-        paymentIntent = await stripe.paymentIntents.confirm(paymentMethodId, {
-          return_url: `${process.env.FRONTEND_URL}/payment/success`,
-        });
-      } else {
-        // Create new payment intent
-        paymentIntent = await stripe.paymentIntents.create({
-          amount: amountInCents,
-          currency: 'inr',
-          payment_method_types: ['card', 'upi', 'netbanking'],
-          metadata: {
-            paymentMethod: paymentMethod
-          }
-        });
-      }
-
-      return {
-        success: paymentIntent.status === 'succeeded',
-        transactionId: paymentIntent.id,
-        clientSecret: paymentIntent.client_secret,
-        message: paymentIntent.status === 'succeeded' ? 'Payment successful' : 'Payment processing'
-      };
-    } else {
-      // Use mock payment for development
-      console.log('Using mock payment (Stripe not configured)');
-
-      // Simulate payment processing delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Always succeed for demo purposes
-      return {
-        success: true,
-        transactionId: `RZP_MOCK_TXN_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        clientSecret: 'mock_client_secret_' + Date.now(),
-        message: 'Mock Razorpay-style payment successful'
-      };
-    }
+    return {
+      success: true,
+      transactionId: `MOCK_TXN_${Date.now()}`,
+      clientSecret: 'mock_secret',
+      message: 'Mock payment successful'
+    };
   } catch (error) {
-    console.error('Payment error:', error);
     return {
       success: false,
       transactionId: null,
@@ -104,7 +125,6 @@ const processPayment = async (amount, paymentMethod, paymentMethodId) => {
     };
   }
 };
-
 // Generate QR Code for booking
 const generateQRCode = async (bookingData) => {
   try {
