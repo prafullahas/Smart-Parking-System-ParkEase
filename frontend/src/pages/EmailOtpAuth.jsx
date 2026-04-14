@@ -48,8 +48,9 @@ const EmailOtpAuth = () => {
         localStorage.setItem('user', JSON.stringify(linkedUser));
         setTimeout(() => navigate(linkedUser.role === 'admin' ? '/admin-dashboard' : '/dashboard'), 600);
       } else {
-        localStorage.setItem('user', JSON.stringify({ name: 'Email User', email, role: 'user' }));
-        setTimeout(() => navigate('/dashboard'), 600);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setMessage('Account not found. Please sign up first.');
       }
       setMessage('Verified');
     } catch (error) {

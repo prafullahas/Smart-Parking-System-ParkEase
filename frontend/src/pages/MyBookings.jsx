@@ -203,7 +203,7 @@ const MyBookings = () => {
                     {/* Action Button */}
                     {booking.qrCode && (
                       <button 
-                        onClick={() => navigate(`/receipt?bookingId=${booking._id}`)}
+                        onClick={() => navigate(`/receipt?bookingId=${booking._id}`, { state: booking })}
                         className="btn btn-outline btn-lg"
                         style={{ width: '100%' }}
                       >

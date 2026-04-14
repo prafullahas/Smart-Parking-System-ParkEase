@@ -90,20 +90,33 @@ const getLocationById = async (req, res) => {
 
     // Read latest sensor states for all slots:
     // {_id, slot_number, is_parked, vehicle_number, timestamp}
+    const slotIdStrings = slots.map(slot => slot._id.toString());
     const slotNumbers = slots.map(slot => slot.slotNumber);
+    const slotNumberById = {};
+    slots.forEach((slot) => {
+      slotNumberById[slot._id.toString()] = slot.slotNumber;
+    });
     const sensorDocs = await mongoose.connection
       .collection('bookings')
-      .find({ 
-        slot_number: { $in: slotNumbers },
-        is_parked: { $exists: true } // Only get sensor documents, not booking documents
+      .find({
+        is_parked: { $exists: true }, // Only get sensor documents, not booking documents
+        $or: [
+          { slot_number: { $in: slotNumbers } },
+          { slot_id: { $in: slotNumbers } },
+          { slot_id: { $in: slotIdStrings } },
+          { slotId: { $in: slotIdStrings } }
+        ]
       })
       .sort({ timestamp: -1 })
       .toArray();
 
     const latestSensorBySlot = {};
     sensorDocs.forEach((doc) => {
-      if (!latestSensorBySlot[doc.slot_number]) {
-        latestSensorBySlot[doc.slot_number] = doc;
+      const sensorSlotKey = String(doc.slot_number || doc.slot_id || doc.slotId || '').trim();
+      if (!sensorSlotKey) return;
+      const resolvedSlotNumber = slotNumberById[sensorSlotKey] || sensorSlotKey;
+      if (!latestSensorBySlot[resolvedSlotNumber]) {
+        latestSensorBySlot[resolvedSlotNumber] = doc;
       }
     });
 
@@ -113,14 +126,16 @@ const getLocationById = async (req, res) => {
       const slotObj = slot.toObject();
       const hasActiveBooking = Boolean(bookingMap[slot._id.toString()]);
       const sensorState = latestSensorBySlot[slot.slotNumber];
+      const sensorKnown = typeof sensorState?.is_parked === 'boolean';
       const sensorParked = sensorState?.is_parked === true;
       const b = bookingMap[slot._id.toString()];
 
-      slotObj.isAvailable = !hasActiveBooking && !sensorParked;
+      slotObj.isAvailable = sensorKnown ? (!sensorParked && !hasActiveBooking) : !hasActiveBooking;
       slotObj.slotState = deriveSlotState({
         currentSlotState: slotObj.slotState,
         hasActiveBooking,
         checkInTime: b?.checkInTime || null,
+        sensorKnown,
         sensorParked,
         sensorVehicleNumber: sensorState?.vehicle_number || null,
         bookedVehicleNumber: b?.vehicleNumber || null

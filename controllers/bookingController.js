@@ -6,11 +6,13 @@ const QRCode = require('qrcode');
 //const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const mongoose = require('mongoose');
 const os = require('os');
+const net = require('net');
 const { sendNotification } = require('../utils/notificationService');
 
 const formatDateTime = (value) => new Date(value).toLocaleString('en-IN');
 
 const getUserName = (user) => user?.name || 'User';
+const normalizeVehicleNumber = (value) => String(value || '').replace(/\s+/g, '').trim().toUpperCase();
 
 const buildBookingSummaryHtml = ({ user, booking, slotNumber, locationName, reason = '', extraLine = '' }) => {
   return `
@@ -43,6 +45,24 @@ const resolveLocalIPv4 = () => {
   }
   return null;
 };
+
+const isLocalPortOpen = (port) => new Promise((resolve) => {
+  const socket = new net.Socket();
+  socket.setTimeout(400);
+  socket.once('connect', () => {
+    socket.destroy();
+    resolve(true);
+  });
+  socket.once('error', () => {
+    socket.destroy();
+    resolve(false);
+  });
+  socket.once('timeout', () => {
+    socket.destroy();
+    resolve(false);
+  });
+  socket.connect(port, '127.0.0.1');
+});
 
 // Process payment with Stripe or mock payment for development
 // const processPayment = async (amount, paymentMethod, paymentMethodId) => {
@@ -129,13 +149,30 @@ const processPayment = async (amount, paymentMethod, paymentMethodId) => {
 const generateQRCode = async (bookingData) => {
   try {
     const localIp = resolveLocalIPv4();
-    const defaultFrontend = localIp ? `http://${localIp}:5173` : 'http://localhost:5173';
-    const frontendBase =
+    const frontendPort = await isLocalPortOpen(5173)
+      ? 5173
+      : (await isLocalPortOpen(5174) ? 5174 : 5173);
+    const defaultFrontend = localIp ? `http://${localIp}:${frontendPort}` : `http://localhost:${frontendPort}`;
+    const configuredFrontend =
       process.env.QR_PUBLIC_BASE_URL ||
       process.env.FRONTEND_PUBLIC_URL ||
       process.env.FRONTEND_URL ||
       defaultFrontend;
-    const qrData = `${frontendBase}/booking/${bookingData._id}`;
+
+    let frontendBase = configuredFrontend;
+    try {
+      const parsed = new URL(configuredFrontend);
+      const isLocalHostUrl =
+        parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+      if (isLocalHostUrl && localIp) {
+        parsed.hostname = localIp;
+        frontendBase = parsed.toString().replace(/\/$/, '');
+      }
+    } catch {
+      frontendBase = configuredFrontend;
+    }
+
+    const qrData = `${frontendBase}/receipt?bookingId=${bookingData._id}&scan=1`;
 
     // Generate QR code as data URI
     const qrCodeDataURI = await QRCode.toDataURL(qrData, {
@@ -560,9 +597,9 @@ const getMyBookings = async (req, res) => {
   }
 };
 
-// @desc    Get booking by ID
+// @desc    Get booking by ID (QR/mobile verification)
 // @route   GET /api/bookings/:id
-// @access  Private
+// @access  Public
 const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
@@ -577,17 +614,18 @@ const getBookingById = async (req, res) => {
       });
     }
 
-    // Check if booking belongs to the user
-    if (booking.userId._id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view this booking'
-      });
-    }
+    const now = new Date();
+    const referenceTime = booking.endTime || booking.startTime || booking.bookingTime;
+    const isExpired =
+      booking.status === 'expired' ||
+      booking.status === 'cancelled' ||
+      booking.status === 'completed' ||
+      (referenceTime ? now > new Date(referenceTime) : false);
 
     res.json({
       success: true,
-      data: booking
+      data: booking,
+      validityStatus: isExpired ? 'EXPIRED' : 'VALID'
     });
   } catch (error) {
     console.error(error);
@@ -883,6 +921,128 @@ const checkOutBooking = async (req, res) => {
   }
 };
 
+// @desc    Mark booking arrival from CV pipeline
+// @route   POST /api/bookings/cv/arrival
+// @access  Public (intended for CV pipeline integration)
+const markArrivalFromCv = async (req, res) => {
+  try {
+    const slotId = req.body.slotId || req.body.slot_Id || null;
+    const slotNumber = req.body.slotNumber || req.body.slot_number || null;
+    const vehicleNumber = req.body.vehicleNumber || req.body.Vehicle_number || req.body.vehicle_number || null;
+    const occupancyStatus =
+      req.body.occupancyStatus ??
+      req.body.occupancy_status ??
+      req.body.is_parked;
+
+    const isOccupied =
+      occupancyStatus === true ||
+      occupancyStatus === 'true' ||
+      occupancyStatus === 1 ||
+      occupancyStatus === '1' ||
+      occupancyStatus === 'occupied' ||
+      occupancyStatus === 'OCCUPIED';
+    if (!isOccupied) {
+      return res.status(400).json({
+        success: false,
+        message: 'occupancyStatus must indicate occupied car presence'
+      });
+    }
+
+    if (!slotId && !slotNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'slotId or slotNumber is required'
+      });
+    }
+
+    let slot = null;
+    if (slotId && mongoose.Types.ObjectId.isValid(slotId)) {
+      slot = await Slot.findById(slotId);
+    }
+    if (!slot && slotNumber) {
+      slot = await Slot.findOne({ slotNumber: String(slotNumber).trim() });
+    }
+    if (!slot) {
+      return res.status(404).json({
+        success: false,
+        message: 'Slot not found'
+      });
+    }
+
+    const now = new Date();
+    const normalizedSensorVehicle = normalizeVehicleNumber(vehicleNumber);
+    const booking = await Booking.findOne({
+      slotId: slot._id,
+      status: 'active',
+      startTime: { $lte: now },
+      endTime: { $gt: now }
+    }).sort({ startTime: -1 });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active booking found for this slot',
+        data: { slotId: slot._id, slotNumber: slot.slotNumber }
+      });
+    }
+
+    const normalizedBookedVehicle = normalizeVehicleNumber(booking.vehicleNumber);
+    if (
+      normalizedSensorVehicle &&
+      normalizedBookedVehicle &&
+      normalizedSensorVehicle !== normalizedBookedVehicle
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: 'Detected vehicle does not match booked vehicle for this slot'
+      });
+    }
+
+    // Idempotency: if arrival was already recorded, return success without rewriting.
+    if (booking.checkInTime) {
+      return res.json({
+        success: true,
+        message: 'Arrival already recorded',
+        data: {
+          bookingId: booking._id,
+          slotId: slot._id,
+          slotNumber: slot.slotNumber,
+          arrivalTime: booking.checkInTime,
+          bookingStatus: booking.status,
+          slotState: slot.slotState
+        }
+      });
+    }
+
+    booking.checkInTime = now;
+    await booking.save();
+
+    slot.slotState = 'ARRIVED';
+    slot.isAvailable = false;
+    await slot.save();
+
+    return res.json({
+      success: true,
+      message: 'Arrival recorded from CV pipeline',
+      data: {
+        bookingId: booking._id,
+        slotId: slot._id,
+        slotNumber: slot.slotNumber,
+        arrivalTime: booking.checkInTime,
+        bookingStatus: booking.status,
+        slotState: slot.slotState
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error recording CV arrival',
+      error: error.message
+    });
+  }
+};
+
 // @desc    Get all bookings (Admin)
 // @route   GET /api/bookings
 // @access  Private/Admin
@@ -1017,6 +1177,7 @@ module.exports = {
   checkInBooking,
   checkOutBooking,
   extendBooking,
+  markArrivalFromCv,
   getAllBookings,
   getBookingVerificationById,
   getPublicBookingTicket,

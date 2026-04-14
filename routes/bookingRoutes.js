@@ -9,6 +9,7 @@ const {
   extendBooking,
   checkInBooking,
   checkOutBooking,
+  markArrivalFromCv,
   getAllBookings,
   getPublicBookingTicket,
   getPublicBookingTicketView
@@ -23,7 +24,8 @@ router.get('/', protect, admin, getAllBookings);
 router.get('/my-bookings', protect, getMyBookings);
 router.get('/public/:id/view', getPublicBookingTicketView);
 router.get('/public/:id', getPublicBookingTicket);
-router.get('/:id', protect, getBookingById);
+router.post('/cv/arrival', markArrivalFromCv);
+router.get('/:id', getBookingById);
 router.put('/:id/cancel', protect, cancelBooking);
 router.put('/:id/extend', protect, extendBooking);
 router.put('/:id/checkin', protect, checkInBooking);

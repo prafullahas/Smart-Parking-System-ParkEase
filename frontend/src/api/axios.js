@@ -20,11 +20,33 @@ const api = axios.create({
   timeout: 10000
 });
 
+const decodeJwtPayload = (token) => {
+  try {
+    const payloadPart = token.split('.')[1];
+    if (!payloadPart) return null;
+    const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = atob(normalized);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+};
+
+const clearAuthStorage = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+};
+
 // Add a request interceptor to include the auth token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
+      const payload = decodeJwtPayload(token);
+      if (!payload?.id) {
+        clearAuthStorage();
+        return config;
+      }
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -62,8 +84,7 @@ api.interceptors.response.use(
         reqUrl.includes('/auth/verify-email-otp') ||
         reqUrl.includes('/auth/resend-email-otp');
       if (!isPublicAuth) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        clearAuthStorage();
         window.location.href = '/login';
       }
     }

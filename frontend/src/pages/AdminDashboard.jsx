@@ -251,7 +251,7 @@ const AdminDashboard = () => {
                       <td>{b.vehicleNumber}</td>
                       <td>{new Date(b.startTime).toLocaleString()}</td>
                       <td>{new Date(b.endTime).toLocaleString()}</td>
-                      <td>{b.status}</td>
+                      <td>{b.checkInTime ? 'arrived' : b.status}</td>
                     </tr>
                   ))}
                 </tbody>

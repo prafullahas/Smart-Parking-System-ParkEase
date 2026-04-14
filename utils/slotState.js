@@ -4,14 +4,17 @@
  */
 const SLOT_STATES = ['NOT_BOOKED', 'BOOKED', 'ARRIVED', 'EXPIRED'];
 
-function deriveSlotState({ currentSlotState, hasActiveBooking, checkInTime, sensorParked, sensorVehicleNumber, bookedVehicleNumber }) {
+function deriveSlotState({ currentSlotState, hasActiveBooking, checkInTime, sensorKnown, sensorParked, sensorVehicleNumber, bookedVehicleNumber }) {
   if (currentSlotState === 'EXPIRED') {
     return 'EXPIRED';
   }
 
-  // If sensor shows car is parked and vehicle numbers match (or no booking vehicle specified)
-  if (sensorParked && (!bookedVehicleNumber || sensorVehicleNumber === bookedVehicleNumber)) {
+  // CV pipeline indicates real occupancy; reservation still matters when sensor=false.
+  if (sensorKnown && sensorParked) {
     return 'ARRIVED';
+  }
+  if (sensorKnown && !sensorParked && !hasActiveBooking) {
+    return 'NOT_BOOKED';
   }
   
   // If user has checked in manually

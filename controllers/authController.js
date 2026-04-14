@@ -388,6 +388,14 @@ const sendEmailOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide a valid email' });
     }
 
+    const linkedUser = await User.findOne({ email });
+    if (!linkedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found. Please sign up first.'
+      });
+    }
+
     const otp = generateOtp();
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
@@ -450,8 +458,14 @@ const verifyEmailOtp = async (req, res) => {
     await authUser.save();
 
     const linkedUser = await User.findOne({ email });
+    if (!linkedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found. Please sign up first.'
+      });
+    }
     const token = jwt.sign(
-      { email, id: linkedUser?._id || null },
+      { email, id: linkedUser._id },
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -463,16 +477,14 @@ const verifyEmailOtp = async (req, res) => {
       data: {
         email,
         isVerified: true,
-        user: linkedUser
-          ? {
-              _id: linkedUser._id,
-              name: linkedUser.name,
-              email: linkedUser.email,
-              phone: linkedUser.phone,
-              role: linkedUser.role,
-              vehicle: linkedUser.vehicle
-            }
-          : null
+        user: {
+          _id: linkedUser._id,
+          name: linkedUser.name,
+          email: linkedUser.email,
+          phone: linkedUser.phone,
+          role: linkedUser.role,
+          vehicle: linkedUser.vehicle
+        }
       }
     });
   } catch (error) {
@@ -489,6 +501,14 @@ const resendEmailOtp = async (req, res) => {
     const email = normalizeEmail(req.body.email);
     if (!/^[\w-.+]+@[\w-]+\.[\w-.]+$/.test(email)) {
       return res.status(400).json({ success: false, message: 'Please provide a valid email' });
+    }
+
+    const linkedUser = await User.findOne({ email });
+    if (!linkedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found. Please sign up first.'
+      });
     }
 
     const otp = generateOtp();

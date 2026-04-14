@@ -26,7 +26,8 @@ const initServer = () => {
 
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || origin?.startsWith('http://localhost:')) {
+      const isPrivateLanOrigin = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(origin || '');
+      if (!origin || allowedOrigins.includes(origin) || origin?.startsWith('http://localhost:') || isPrivateLanOrigin) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));

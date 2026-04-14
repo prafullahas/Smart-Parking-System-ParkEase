@@ -4,9 +4,92 @@ const Slot = require('../models/Slot');
 const Location = require('../models/Location');
 const { sendNotification } = require('./notificationService');
 
+const reconcileSensorDrivenSlotTransitions = async () => {
+  const now = new Date();
+  const sensorDocs = await Booking.db
+    .collection('bookings')
+    .find({ is_parked: { $exists: true } })
+    .sort({ timestamp: -1, _id: -1 })
+    .toArray();
+
+  const latestSensorBySlot = sensorDocs.reduce((acc, doc) => {
+    const key = String(doc.slot_number || doc.slot_id || doc.slotId || '').trim();
+    if (key && !acc[key]) {
+      acc[key] = doc;
+    }
+    return acc;
+  }, {});
+
+  if (Object.keys(latestSensorBySlot).length === 0) {
+    return;
+  }
+
+  const slotValues = Object.keys(latestSensorBySlot);
+  const slots = await Slot.find({
+    $or: [
+      { slotNumber: { $in: slotValues } },
+      { _id: { $in: slotValues.filter((v) => /^[0-9a-fA-F]{24}$/.test(v)) } }
+    ]
+  });
+
+  for (const slot of slots) {
+    const sensor =
+      latestSensorBySlot[slot.slotNumber] ||
+      latestSensorBySlot[String(slot._id)];
+    if (!sensor) continue;
+
+    const sensorParked = sensor.is_parked === true;
+    const activeBooking = await Booking.findOne({
+      slotId: slot._id,
+      status: 'active',
+      startTime: { $lte: now },
+      endTime: { $gt: now }
+    }).populate('userId', 'email name phone');
+
+    if (sensorParked) {
+      slot.isAvailable = false;
+      slot.slotState = 'ARRIVED';
+      await slot.save();
+
+      if (activeBooking && !activeBooking.checkInTime) {
+        activeBooking.checkInTime = sensor.timestamp ? new Date(sensor.timestamp) : now;
+        await activeBooking.save();
+      }
+      continue;
+    }
+
+    // Sensor=false with no active booking means slot is free.
+    // If there is an active booking without arrival yet, keep it reserved as BOOKED.
+    if (!activeBooking) {
+      slot.isAvailable = true;
+      slot.slotState = 'NOT_BOOKED';
+      await slot.save();
+      continue;
+    }
+
+    if (!activeBooking.checkInTime) {
+      slot.isAvailable = false;
+      slot.slotState = 'BOOKED';
+      await slot.save();
+      continue;
+    }
+
+    // If car had arrived and now sensor=false, treat as checkout and release slot.
+    slot.isAvailable = true;
+    slot.slotState = 'NOT_BOOKED';
+    await slot.save();
+
+    activeBooking.status = 'completed';
+    activeBooking.checkOutTime = sensor.timestamp ? new Date(sensor.timestamp) : now;
+    await activeBooking.save();
+  }
+};
+
 // Function to complete expired bookings and release slots
 const completeExpiredBookings = async () => {
   try {
+    await reconcileSensorDrivenSlotTransitions();
+
     const now = new Date();
 
     // Find all active bookings that have expired
@@ -113,9 +196,95 @@ const checkNoShowBookings = async () => {
 
     console.log(`Checking ${potentialNoShows.length} potential no-show bookings`);
 
+    const slotNumbers = [
+      ...new Set(
+        potentialNoShows
+          .map((booking) => booking.slotId?.slotNumber)
+          .filter(Boolean)
+      )
+    ];
+    const slotIdStrings = [
+      ...new Set(
+        potentialNoShows
+          .map((booking) => booking.slotId?._id?.toString?.() || booking.slotId?.toString?.())
+          .filter(Boolean)
+      )
+    ];
+    const slotNumberById = {};
+    potentialNoShows.forEach((booking) => {
+      const bookingSlotId = booking.slotId?._id?.toString?.() || booking.slotId?.toString?.();
+      if (bookingSlotId && booking.slotId?.slotNumber) {
+        slotNumberById[bookingSlotId] = booking.slotId.slotNumber;
+      }
+    });
+
+    let latestSensorBySlot = {};
+    if (slotNumbers.length > 0) {
+      const sensorDocs = await Booking.db
+        .collection('bookings')
+        .find({
+          is_parked: { $exists: true },
+          $or: [
+            { slot_number: { $in: slotNumbers } },
+            { slot_id: { $in: slotNumbers } },
+            { slot_id: { $in: slotIdStrings } },
+            { slotId: { $in: slotIdStrings } }
+          ]
+        })
+        .sort({ timestamp: -1 })
+        .toArray();
+
+      latestSensorBySlot = sensorDocs.reduce((acc, doc) => {
+        const sensorSlotKey = String(doc?.slot_number || doc?.slot_id || doc?.slotId || '').trim();
+        if (!sensorSlotKey) return acc;
+        const resolvedSlotNumber = slotNumberById[sensorSlotKey] || sensorSlotKey;
+        if (!acc[resolvedSlotNumber]) {
+          acc[resolvedSlotNumber] = doc;
+        }
+        return acc;
+      }, {});
+    }
+
     for (const booking of potentialNoShows) {
       if (!booking.reminderFlags) {
         booking.reminderFlags = {};
+      }
+
+      const slotNumber = booking.slotId?.slotNumber;
+      const sensorState = slotNumber ? latestSensorBySlot[slotNumber] : null;
+      const sensorParked = sensorState?.is_parked === true;
+      if (sensorParked) {
+        booking.checkInTime = sensorState?.timestamp ? new Date(sensorState.timestamp) : now;
+        await booking.save();
+
+        if (booking.slotId) {
+          const slotDoc = await Slot.findById(booking.slotId._id || booking.slotId);
+          if (slotDoc) {
+            slotDoc.slotState = 'ARRIVED';
+            slotDoc.isAvailable = false;
+            await slotDoc.save();
+          }
+        }
+
+        await sendNotification({
+          user: booking.userId,
+          type: 'ARRIVAL_CONFIRMED',
+          message: `Arrival confirmed for slot ${booking.slotId?.slotNumber}.`,
+          emailSubject: 'Arrival Confirmed - ParkEase',
+          emailHtml: `
+            <div style="font-family:Arial,sans-serif;max-width:640px">
+              <h2 style="color:#166534">Arrival confirmed</h2>
+              <p>Your vehicle has been detected at your booked slot.</p>
+              <ul>
+                <li><strong>Booking ID:</strong> ${booking._id}</li>
+                <li><strong>Slot:</strong> ${booking.slotId?.slotNumber || 'N/A'}</li>
+                <li><strong>Status:</strong> <span style="color:#166534">ARRIVED</span></li>
+              </ul>
+            </div>
+          `,
+          booking
+        });
+        continue;
       }
 
       if (booking.startTime <= late5 && !booking.reminderFlags?.late5MinSent) {
