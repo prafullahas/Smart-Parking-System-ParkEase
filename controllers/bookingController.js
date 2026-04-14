@@ -50,7 +50,7 @@ const processPayment = async (amount, paymentMethod, paymentMethodId) => {
     // Check if Stripe is properly configured
     if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== 'sk_test_your_stripe_secret_key_here') {
       // Use real Stripe payment
-      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      //const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
       // Convert amount to cents (Stripe expects amounts in smallest currency unit)
       const amountInCents = Math.round(amount * 100);
